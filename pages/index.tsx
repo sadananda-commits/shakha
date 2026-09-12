@@ -34,7 +34,7 @@ export default function HomePage() {
           Hindu Swayamsevak Sangh
         </p>
         <h1 className="text-4xl sm:text-5xl font-display font-semibold text-ink max-w-2xl mx-auto leading-tight">
-          One Shakha, every week, across Denmark.
+          Our Shakha, Our Extended Family, Across Denmark.
         </h1>
         <p className="mt-4 text-ink-light max-w-lg mx-auto">
           Find your Shakha, confirm attendance for your family in seconds, and explore
