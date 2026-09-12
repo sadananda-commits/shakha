@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
+import BookReadingStats from '@/components/BookReadingStats';
 import { callHssApi, HssApiError } from '@/lib/hssApi';
 import { AdminSummary, AreaOverviewRow, Participant } from '@/lib/types';
 
@@ -184,6 +185,8 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
           </table>
         </div>
       </div>
+
+      <BookReadingStats />
 
       <div>
         <h2 className="text-lg font-display font-semibold text-ink mb-3">
