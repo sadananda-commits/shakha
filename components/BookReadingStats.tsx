@@ -95,7 +95,7 @@ export default function BookReadingStats() {
                       <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                       <Tooltip
                         contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                        formatter={(value: number) => [value, 'Pages Read']}
+                        formatter={(value) => [`${value}`, 'Pages Read']}
                       />
                       <Bar dataKey="pagesRead" fill="#C24914" radius={[4, 4, 0, 0]} />
                     </BarChart>
@@ -120,7 +120,7 @@ export default function BookReadingStats() {
                       <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                       <Tooltip
                         contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                        formatter={(value: number) => [value, 'Participants']}
+                        formatter={(value) => [`${value}`, 'Participants']}
                       />
                       <Bar dataKey="participants" fill="#2E4374" radius={[4, 4, 0, 0]} />
                     </BarChart>
