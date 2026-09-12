@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Layout from '@/components/Layout';
 import NextShakhaCard from '@/components/NextShakhaCard';
+import ActivitiesCard from '@/components/ActivitiesCard';
 import AttendancePoll from '@/components/AttendancePoll';
 import ProfileCard from '@/components/ProfileCard';
 import AddParticipantForm from '@/components/AddParticipantForm';
@@ -359,6 +360,8 @@ function Dashboard({
       )}
 
       <NextShakhaCard shakha={shakha} schedule={nextSchedule} />
+
+      <ActivitiesCard userId={user['User ID']} participants={participants} />
 
       {nextSchedule && scheduleActivities.length > 0 && (
         <div>

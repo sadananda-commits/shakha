@@ -168,3 +168,43 @@ export interface AreaOverviewRow {
   participants: number;
   confirmed: number;
 }
+
+// --- Community Activities (My Shakha "Activities" card) ---
+// Separate from `Activity` above, which is the home-page activity cards.
+
+export interface CommunityActivity {
+  'Activity ID': string;
+  'Activity Name': string;
+  'Type': string; // e.g. 'Reading Marathon'
+  'Description': string;
+  'Start Date': string;
+  'End Date': string;
+  'Shakha ID': string;
+  'Status': 'Ongoing' | 'Historical'; // computed by the backend, not stored
+}
+
+export interface ActivityBook {
+  'Book ID': string;
+  'Activity ID': string;
+  'Book Name': string;
+  'Author': string;
+  'Total Pages': string | number;
+  'Added By User ID': string;
+}
+
+export interface ActivityLogEntry {
+  'Log ID': string;
+  'Activity ID': string;
+  'User ID': string;
+  'Participant ID': string;
+  'Date/Time': string;
+  'Book ID': string;
+  'Chapter': string;
+  'Pages Read': number;
+  'Created Date': string;
+}
+
+export interface ActivityDetailBundle {
+  activity: CommunityActivity;
+  books: ActivityBook[];
+}
