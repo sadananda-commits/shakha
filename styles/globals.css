@@ -1,0 +1,39 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-paper text-ink font-sans antialiased;
+}
+
+h1, h2, h3, h4 {
+  @apply font-display;
+}
+
+:focus-visible {
+  outline: 2px solid theme('colors.marigold.DEFAULT');
+  outline-offset: 2px;
+}
+
+.input {
+  @apply w-full rounded-card border border-ink/20 bg-paper-raised px-4 py-2.5 text-ink placeholder:text-ink-muted focus:border-marigold outline-none transition-colors;
+}
+
+.btn-primary {
+  @apply px-6 py-3 rounded-card bg-ink text-paper font-medium disabled:opacity-60 hover:bg-ink-light transition-colors;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
