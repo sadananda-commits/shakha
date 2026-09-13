@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Layout from '@/components/Layout';
 import { callHssApi, HssApiError } from '@/lib/hssApi';
-import { formatDisplayDate, formatDisplayTime } from '@/lib/format';
 import { DashboardBundle, ScheduleActivity, ScheduleEntry, Shakha } from '@/lib/types';
 
 const SESSION_KEY = 'hss_user_id';
@@ -100,7 +99,7 @@ export default function CoordinatorSchedulePage() {
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-ink">{formatDisplayDate(entry.Date)} · {entry.Day}</span>
+                  <span className="font-medium text-ink">{entry.Date} · {entry.Day}</span>
                   <span className="flex gap-2">
                     <Badge text={entry.Status} />
                     <Badge
@@ -110,7 +109,7 @@ export default function CoordinatorSchedulePage() {
                   </span>
                 </div>
                 <p className="text-sm text-ink-light mt-1">
-                  {formatDisplayTime(entry['Start Time'])} – {formatDisplayTime(entry['End Time'])} · {entry.Location}
+                  {entry['Start Time']} – {entry['End Time']} · {entry.Location}
                 </p>
               </button>
             ))}
@@ -251,8 +250,6 @@ function ActivityManager({
   const [form, setForm] = useState({ activityTime: '', activityName: '', responsiblePerson: '', remarks: '' });
   const [copyFrom, setCopyFrom] = useState('');
   const [error, setError] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ activityTime: '', activityName: '', responsiblePerson: '' });
 
   useEffect(() => {
     load();
@@ -280,27 +277,6 @@ function ActivityManager({
     load();
   }
 
-  function handleStartEdit(a: ScheduleActivity) {
-    setEditingId(a['Activity Row ID']);
-    setEditForm({
-      activityTime: a['Activity Time'],
-      activityName: a['Activity Name'],
-      responsiblePerson: a['Responsible Person'],
-    });
-  }
-
-  async function handleSaveEdit() {
-    if (!editingId) return;
-    await callHssApi('updateScheduleActivity', {
-      userId,
-      shakhaId,
-      activityRowId: editingId,
-      ...editForm,
-    });
-    setEditingId(null);
-    load();
-  }
-
   async function handleCopy() {
     if (!copyFrom) return;
     await callHssApi('copyPreviousWeekActivities', {
@@ -320,7 +296,7 @@ function ActivityManager({
     <div className="bg-paper-raised rounded-card border border-ink/10 p-5 sm:p-6 flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <h3 className="font-display text-lg font-semibold text-ink">
-          Run of show — {formatDisplayDate(entry.Date)}
+          Run of show — {entry.Date}
         </h3>
         {entry['Publish Status'] === 'Draft' && (
           <button onClick={handlePublish} className="btn-primary">Publish</button>
@@ -330,62 +306,18 @@ function ActivityManager({
       {activities.length > 0 && (
         <table className="w-full text-sm">
           <tbody>
-            {activities.map((a) =>
-              editingId === a['Activity Row ID'] ? (
-                <tr key={a['Activity Row ID']} className="border-t border-ink/10 bg-marigold/5">
-                  <td className="py-2 pr-2">
-                    <input
-                      value={editForm.activityTime}
-                      onChange={(e) => setEditForm({ ...editForm, activityTime: e.target.value })}
-                      className="input w-24"
-                      placeholder="10:30"
-                    />
-                  </td>
-                  <td className="py-2 pr-2">
-                    <input
-                      value={editForm.activityName}
-                      onChange={(e) => setEditForm({ ...editForm, activityName: e.target.value })}
-                      className="input w-full"
-                    />
-                  </td>
-                  <td className="py-2 pr-2">
-                    <input
-                      value={editForm.responsiblePerson}
-                      onChange={(e) => setEditForm({ ...editForm, responsiblePerson: e.target.value })}
-                      className="input w-full"
-                    />
-                  </td>
-                  <td className="py-2 text-right whitespace-nowrap">
-                    <button onClick={handleSaveEdit} className="text-xs text-sage underline underline-offset-2 mr-3">
-                      Save
-                    </button>
-                    <button
-                      onClick={() => setEditingId(null)}
-                      className="text-xs text-ink-light underline underline-offset-2"
-                    >
-                      Cancel
-                    </button>
-                  </td>
-                </tr>
-              ) : (
-                <tr key={a['Activity Row ID']} className="border-t border-ink/10">
-                  <td className="py-2 pr-3 font-mono text-ink-light whitespace-nowrap">{formatDisplayTime(a['Activity Time'])}</td>
-                  <td className="py-2 pr-3 text-ink font-medium">{a['Activity Name']}</td>
-                  <td className="py-2 pr-3 text-ink-light">{a['Responsible Person']}</td>
-                  <td className="py-2 text-right whitespace-nowrap">
-                    <button
-                      onClick={() => handleStartEdit(a)}
-                      className="text-xs text-ink-light underline underline-offset-2 mr-3"
-                    >
-                      Edit
-                    </button>
-                    <button onClick={() => handleRemove(a['Activity Row ID'])} className="text-xs text-vermilion underline underline-offset-2">
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              )
-            )}
+            {activities.map((a) => (
+              <tr key={a['Activity Row ID']} className="border-t border-ink/10">
+                <td className="py-2 pr-3 font-mono text-ink-light whitespace-nowrap">{a['Activity Time']}</td>
+                <td className="py-2 pr-3 text-ink font-medium">{a['Activity Name']}</td>
+                <td className="py-2 pr-3 text-ink-light">{a['Responsible Person']}</td>
+                <td className="py-2 text-right">
+                  <button onClick={() => handleRemove(a['Activity Row ID'])} className="text-xs text-vermilion underline underline-offset-2">
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       )}
@@ -395,7 +327,7 @@ function ActivityManager({
           <select value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)} className="input flex-1">
             <option value="">Copy activities from…</option>
             {otherEntries.map((e) => (
-              <option key={e['Schedule ID']} value={e['Schedule ID']}>{formatDisplayDate(e.Date)}</option>
+              <option key={e['Schedule ID']} value={e['Schedule ID']}>{e.Date}</option>
             ))}
           </select>
           <button onClick={handleCopy} className="btn-primary whitespace-nowrap">Copy</button>
