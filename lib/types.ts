@@ -70,6 +70,7 @@ export interface ScheduleEntry {
   Status: 'Scheduled' | 'Cancelled' | 'Completed' | 'Special Event';
   Notes: string;
   'Publish Status'?: 'Draft' | 'Published';
+  'Day Schedule'?: string;
 }
 
 export interface ScheduleActivity {
