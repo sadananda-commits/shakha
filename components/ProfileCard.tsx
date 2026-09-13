@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { callHssApi, HssApiError } from '@/lib/hssApi';
 import { User } from '@/lib/types';
+import { formatDisplayDate } from '@/lib/format';
 
 export default function ProfileCard({
   user,
   onUpdated,
+  bare = false,
 }: {
   user: User;
   onUpdated: () => void;
+  bare?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
@@ -36,8 +39,8 @@ export default function ProfileCard({
   }
 
   if (!editing) {
-    return (
-      <div className="bg-paper-raised rounded-card border border-ink/10 p-5 sm:p-6">
+    const content = (
+      <>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display text-lg font-semibold text-ink">My Profile</h3>
           <button
@@ -56,10 +59,13 @@ export default function ProfileCard({
           <ProfileRow label="Emergency contact" value={user['Emergency Contact']} />
         </dl>
         <p className="text-xs text-ink-muted mt-4">
-          GDPR consent given {user['Consent Date'] ? `on ${user['Consent Date']}` : ''}
+          GDPR consent given {user['Consent Date'] ? `on ${formatDisplayDate(user['Consent Date'])}` : ''}
         </p>
-      </div>
+      </>
     );
+
+    if (bare) return content;
+    return <div className="bg-paper-raised rounded-card border border-ink/10 p-5 sm:p-6">{content}</div>;
   }
 
   return (

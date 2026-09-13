@@ -314,6 +314,7 @@ function Dashboard({
 }) {
   const { user, shakha, nextSchedule, scheduleActivities, participants, attendance, isCoordinator } = dashboard;
   const [addingParticipant, setAddingParticipant] = useState(false);
+  const [activeTab, setActiveTab] = useState<'profile' | 'participants' | null>(null);
 
   const initialResponses: Record<string, AttendanceResponse> = {};
   attendance.forEach((a) => {
@@ -378,41 +379,86 @@ function Dashboard({
         </div>
       )}
 
-      <ProfileCard user={user} onUpdated={onRefresh} />
-
-      <div className="bg-paper-raised rounded-card border border-ink/10 p-5 sm:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display text-lg font-semibold text-ink">My Participants</h3>
-          {!addingParticipant && (
-            <button
-              onClick={() => setAddingParticipant(true)}
-              className="text-sm text-marigold-dark underline underline-offset-2"
-            >
-              + Add Participant
-            </button>
-          )}
+      <div className="bg-paper-raised rounded-card border border-ink/10 overflow-hidden">
+        <div className="flex border-b border-ink/10">
+          <TabButton
+            label="My Profile"
+            active={activeTab === 'profile'}
+            onClick={() => setActiveTab((t) => (t === 'profile' ? null : 'profile'))}
+          />
+          <TabButton
+            label="My Participants"
+            active={activeTab === 'participants'}
+            onClick={() => setActiveTab((t) => (t === 'participants' ? null : 'participants'))}
+          />
         </div>
-        <ul className="flex flex-col gap-2">
-          {participants.map((p) => (
-            <li key={p['Participant ID']} className="flex justify-between text-sm">
-              <span className="text-ink">{p['Participant Name']}</span>
-              <span className="text-ink-muted">{p.Relationship}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
 
-      {addingParticipant && (
-        <AddParticipantForm
-          userId={user['User ID']}
-          onAdded={() => {
-            setAddingParticipant(false);
-            onRefresh();
-          }}
-          onCancel={() => setAddingParticipant(false)}
-        />
-      )}
+        {activeTab === 'profile' && (
+          <div className="p-5 sm:p-6">
+            <ProfileCard user={user} onUpdated={onRefresh} bare />
+          </div>
+        )}
+
+        {activeTab === 'participants' && (
+          <div className="p-5 sm:p-6 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-lg font-semibold text-ink">My Participants</h3>
+              {!addingParticipant && (
+                <button
+                  onClick={() => setAddingParticipant(true)}
+                  className="text-sm text-marigold-dark underline underline-offset-2"
+                >
+                  + Add Participant
+                </button>
+              )}
+            </div>
+            <ul className="flex flex-col gap-2">
+              {participants.map((p) => (
+                <li key={p['Participant ID']} className="flex justify-between text-sm">
+                  <span className="text-ink">{p['Participant Name']}</span>
+                  <span className="text-ink-muted">{p.Relationship}</span>
+                </li>
+              ))}
+            </ul>
+
+            {addingParticipant && (
+              <AddParticipantForm
+                userId={user['User ID']}
+                onAdded={() => {
+                  setAddingParticipant(false);
+                  onRefresh();
+                }}
+                onCancel={() => setAddingParticipant(false)}
+              />
+            )}
+          </div>
+        )}
+      </div>
     </div>
+  );
+}
+
+function TabButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+        active
+          ? 'border-marigold-dark text-ink'
+          : 'border-transparent text-ink-muted hover:text-ink-light'
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
