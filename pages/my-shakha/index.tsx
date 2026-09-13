@@ -3,7 +3,6 @@ import Link from 'next/link';
 import Layout from '@/components/Layout';
 import NextShakhaCard from '@/components/NextShakhaCard';
 import ActivitiesCard from '@/components/ActivitiesCard';
-import AttendancePoll from '@/components/AttendancePoll';
 import ProfileCard from '@/components/ProfileCard';
 import AddParticipantForm from '@/components/AddParticipantForm';
 import ScheduleActivitiesTable from '@/components/ScheduleActivitiesTable';
@@ -359,7 +358,16 @@ function Dashboard({
         </Link>
       )}
 
-      <NextShakhaCard shakha={shakha} schedule={nextSchedule} />
+      <NextShakhaCard
+        shakha={shakha}
+        schedule={nextSchedule}
+        participants={participants}
+        initialResponses={initialResponses}
+        onSubmitAttendance={async (r) => {
+          await handleSubmit(r);
+          onRefresh();
+        }}
+      />
 
       <ActivitiesCard userId={user['User ID']} participants={participants} />
 
@@ -368,17 +376,6 @@ function Dashboard({
           <h3 className="font-display text-lg font-semibold text-ink mb-3">Schedule</h3>
           <ScheduleActivitiesTable activities={scheduleActivities} />
         </div>
-      )}
-
-      {nextSchedule && (
-        <AttendancePoll
-          participants={participants}
-          initialResponses={initialResponses}
-          onSubmit={async (r) => {
-            await handleSubmit(r);
-            onRefresh();
-          }}
-        />
       )}
 
       <ProfileCard user={user} onUpdated={onRefresh} />
