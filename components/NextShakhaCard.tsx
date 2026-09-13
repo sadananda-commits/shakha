@@ -41,14 +41,12 @@ export default function NextShakhaCard({
               {schedule.Location}
             </p>
             {schedule.Status === 'Special Event' && (
-              <>
-                <span className="inline-block mt-3 text-xs font-mono bg-marigold text-ink px-2 py-1 rounded">
-                  Special Event
-                </span>
+              <span className="inline-flex flex-col items-start gap-1 mt-3 bg-marigold text-ink px-3 py-2 rounded">
+                <span className="text-xs font-mono">Special Event</span>
                 {schedule.Notes && (
-                  <p className="mt-2 text-paper/80 text-sm">{schedule.Notes}</p>
+                  <span className="font-bold text-base">{schedule.Notes}</span>
                 )}
-              </>
+              </span>
             )}
           </>
         ) : (
