@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { callHssApi } from '@/lib/hssApi';
+import { formatDisplayDate, formatDisplayDateTime, toDatetimeLocalValue } from '@/lib/format';
 import {
   ActivityBook,
   ActivityDetailBundle,
@@ -73,8 +74,10 @@ export default function ActivitiesCard({ userId, participants }: ActivitiesCardP
                   <div>
                     <p className="font-display font-semibold text-ink">{a['Activity Name']}</p>
                     <p className="text-xs text-ink-muted font-mono mt-0.5">
-                      {a['Start Date']}
-                      {a['End Date'] && a['End Date'] !== a['Start Date'] ? ` — ${a['End Date']}` : ''}
+                      {formatDisplayDate(a['Start Date'])}
+                      {a['End Date'] && a['End Date'] !== a['Start Date']
+                        ? ` — ${formatDisplayDate(a['End Date'])}`
+                        : ''}
                     </p>
                   </div>
                   <span className="text-ink-light text-sm">{isOpen ? 'Hide' : 'View'}</span>
@@ -137,7 +140,7 @@ function ReadingMarathonRunTime({
   const [myLog, setMyLog] = useState<ActivityLogEntry[]>([]);
   const [participantId, setParticipantId] = useState(participants[0]?.['Participant ID'] || '');
   const [bookId, setBookId] = useState('');
-  const [dateTime, setDateTime] = useState(() => new Date().toISOString().slice(0, 16));
+  const [dateTime, setDateTime] = useState(() => toDatetimeLocalValue(new Date()));
   const [chapter, setChapter] = useState('');
   const [pagesRead, setPagesRead] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -192,7 +195,7 @@ function ReadingMarathonRunTime({
         userId,
         participantId,
         bookId,
-        dateTime,
+        dateTime: new Date(dateTime).toISOString(),
         chapter,
         pagesRead: Number(pagesRead),
       });
@@ -331,7 +334,7 @@ function ReadingMarathonRunTime({
               <tbody>
                 {myLog.map((l) => (
                   <tr key={l['Log ID']} className="border-t border-ink/10">
-                    <td className="px-3 py-2 text-ink-light font-mono">{l['Date/Time']}</td>
+                    <td className="px-3 py-2 text-ink-light font-mono">{formatDisplayDateTime(l['Date/Time'])}</td>
                     <td className="px-3 py-2 text-ink">{participantName(l['Participant ID'])}</td>
                     <td className="px-3 py-2 text-ink-light">{bookName(l['Book ID'])}</td>
                     <td className="px-3 py-2 text-ink-light">{l['Chapter'] || '—'}</td>
@@ -363,7 +366,7 @@ function ExerciseMarathonRunTime({
   const [myLog, setMyLog] = useState<ExerciseLogEntry[]>([]);
   const [participantId, setParticipantId] = useState(participants[0]?.['Participant ID'] || '');
   const [exerciseType, setExerciseType] = useState<ExerciseType>('Running');
-  const [dateTime, setDateTime] = useState(() => new Date().toISOString().slice(0, 16));
+  const [dateTime, setDateTime] = useState(() => toDatetimeLocalValue(new Date()));
   const [distanceKm, setDistanceKm] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -391,7 +394,7 @@ function ExerciseMarathonRunTime({
         userId,
         participantId,
         exerciseType,
-        dateTime,
+        dateTime: new Date(dateTime).toISOString(),
         distanceKm: Number(distanceKm),
       });
       setDistanceKm('');
@@ -482,7 +485,7 @@ function ExerciseMarathonRunTime({
               <tbody>
                 {myLog.map((l) => (
                   <tr key={l['Log ID']} className="border-t border-ink/10">
-                    <td className="px-3 py-2 text-ink-light font-mono">{l['Date/Time']}</td>
+                    <td className="px-3 py-2 text-ink-light font-mono">{formatDisplayDateTime(l['Date/Time'])}</td>
                     <td className="px-3 py-2 text-ink">{participantName(l['Participant ID'])}</td>
                     <td className="px-3 py-2 text-ink-light">{l['Exercise Type']}</td>
                     <td className="px-3 py-2 text-right text-ink">{l['Distance KM']}</td>
@@ -551,7 +554,7 @@ function EventRsvpPanel({
   return (
     <div className="flex flex-col gap-4">
       <div className="bg-paper-raised rounded-card border border-ink/10 p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-        {activity['Start Date'] && <InfoRow label="Date" value={activity['Start Date']} />}
+        {activity['Start Date'] && <InfoRow label="Date" value={formatDisplayDate(activity['Start Date'])} />}
         {activity['Event Time'] && <InfoRow label="Time" value={activity['Event Time']} />}
         {activity['Location'] && <InfoRow label="Location" value={activity['Location']} />}
         {activity['Dress Code'] && <InfoRow label="Dress" value={activity['Dress Code']} />}
