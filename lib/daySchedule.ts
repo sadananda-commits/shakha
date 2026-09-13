@@ -24,7 +24,9 @@ export interface DayScheduleRow {
   responsible?: string;
 }
 
-const LINE_PATTERN = /^(\d{1,2}:\d{2})\s*(.*)$/;
+// Time entries are typed inconsistently in the sheet ('10:00' as well as
+// '10.05'), so accept either ':' or '.' between hour and minute.
+const LINE_PATTERN = /^(\d{1,2})[:.](\d{2})\s*(.*)$/;
 
 /**
  * Parses a raw multi-line "Day Schedule" cell into structured rows.
@@ -42,7 +44,8 @@ export function parseDaySchedule(raw: string | null | undefined): DayScheduleRow
       const match = line.match(LINE_PATTERN);
       if (!match) return null;
 
-      const [, time, rest] = match;
+      const [, hh, mm, rest] = match;
+      const time = `${hh}:${mm}`;
 
       // Split on the first ':' or '-' to separate activity from the
       // person responsible. Some lines (e.g. "Break") have neither.
