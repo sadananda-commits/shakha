@@ -35,7 +35,7 @@ export default function NextShakhaCard({
 
         {schedule ? (
           <>
-            <p className="text-2xl font-display font-semibold">{formatDisplayDateLong(schedule.Date)}</p>
+            <p className="text-2xl font-display font-semibold">{formatDisplayDate(schedule.Date)}</p>
             <p className="text-paper/80 mt-1">
               {formatDisplayTime(schedule['Start Time'])} – {formatDisplayTime(schedule['End Time'])} ·{' '}
               {schedule.Location}
