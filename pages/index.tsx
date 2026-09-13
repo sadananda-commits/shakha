@@ -43,18 +43,12 @@ export default function HomePage() {
         <div className="flex justify-center my-8">
           <FlameDivider />
         </div>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <div className="flex justify-center">
           <Link
             href="/my-shakha"
             className="px-6 py-3 rounded-card bg-ink text-paper font-medium"
           >
             My Shakha
-          </Link>
-          <Link
-            href="/baudhik"
-            className="px-6 py-3 rounded-card border border-ink/20 text-ink font-medium"
-          >
-            Baudhik Repository
           </Link>
         </div>
       </section>
