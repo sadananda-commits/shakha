@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AttendanceResponse, Participant, ScheduleEntry, Shakha } from '@/lib/types';
-import { formatDisplayDateLong, formatDisplayTime } from '@/lib/format';
+import { formatDisplayDate, formatDisplayTime } from '@/lib/format';
 import { parseDaySchedule } from '@/lib/daySchedule';
 
 const ATTENDANCE_OPTIONS: { value: AttendanceResponse; label: string; emoji: string }[] = [
