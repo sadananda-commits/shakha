@@ -4,9 +4,15 @@ import {
   ActivityBook,
   ActivityDetailBundle,
   ActivityLogEntry,
+  ActivityRsvp,
   CommunityActivity,
+  ExerciseLogEntry,
+  ExerciseType,
   Participant,
+  RsvpResponse,
 } from '@/lib/types';
+
+type StatusFilter = 'Upcoming' | 'Ongoing' | 'Historical';
 
 interface ActivitiesCardProps {
   userId: string;
@@ -14,7 +20,7 @@ interface ActivitiesCardProps {
 }
 
 export default function ActivitiesCard({ userId, participants }: ActivitiesCardProps) {
-  const [statusFilter, setStatusFilter] = useState<'Ongoing' | 'Historical'>('Ongoing');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('Ongoing');
   const [activities, setActivities] = useState<CommunityActivity[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -28,8 +34,6 @@ export default function ActivitiesCard({ userId, participants }: ActivitiesCardP
       .finally(() => setLoadingList(false));
   }, [statusFilter]);
 
-  const selected = activities.find((a) => a['Activity ID'] === selectedId) || null;
-
   return (
     <div className="bg-paper-raised rounded-card border border-ink/10 p-5 sm:p-6 flex flex-col gap-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -39,9 +43,10 @@ export default function ActivitiesCard({ userId, participants }: ActivitiesCardP
         </div>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as 'Ongoing' | 'Historical')}
+          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
           className="input w-auto"
         >
+          <option value="Upcoming">Upcoming activities</option>
           <option value="Ongoing">Ongoing activities</option>
           <option value="Historical">Historical activities</option>
         </select>
@@ -68,7 +73,8 @@ export default function ActivitiesCard({ userId, participants }: ActivitiesCardP
                   <div>
                     <p className="font-display font-semibold text-ink">{a['Activity Name']}</p>
                     <p className="text-xs text-ink-muted font-mono mt-0.5">
-                      {a['Start Date']} — {a['End Date']}
+                      {a['Start Date']}
+                      {a['End Date'] && a['End Date'] !== a['Start Date'] ? ` — ${a['End Date']}` : ''}
                     </p>
                   </div>
                   <span className="text-ink-light text-sm">{isOpen ? 'Hide' : 'View'}</span>
@@ -77,13 +83,28 @@ export default function ActivitiesCard({ userId, participants }: ActivitiesCardP
                 {isOpen && (
                   <div className="px-4 py-4 border-t border-ink/10 bg-paper">
                     <p className="text-sm text-ink-muted mb-4">{a['Description']}</p>
-                    {a['Type'] === 'Reading Marathon' ? (
+
+                    {a['Type'] === 'Reading Marathon' && (
                       <ReadingMarathonRunTime
                         activityId={a['Activity ID']}
                         userId={userId}
                         participants={participants}
                       />
-                    ) : (
+                    )}
+
+                    {a['Type'] === 'Exercise Marathon' && (
+                      <ExerciseMarathonRunTime
+                        activityId={a['Activity ID']}
+                        userId={userId}
+                        participants={participants}
+                      />
+                    )}
+
+                    {a['Type'] === 'Event' && (
+                      <EventRsvpPanel activity={a} userId={userId} participants={participants} />
+                    )}
+
+                    {!['Reading Marathon', 'Exercise Marathon', 'Event'].includes(a['Type']) && (
                       <p className="text-sm text-ink-muted italic">
                         Logging isn't set up yet for this activity type.
                       </p>
@@ -98,6 +119,10 @@ export default function ActivitiesCard({ userId, participants }: ActivitiesCardP
     </div>
   );
 }
+
+// ---------------------------------------------------------------------
+// Reading Marathon
+// ---------------------------------------------------------------------
 
 function ReadingMarathonRunTime({
   activityId,
@@ -318,6 +343,265 @@ function ReadingMarathonRunTime({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Exercise Marathon
+// ---------------------------------------------------------------------
+
+function ExerciseMarathonRunTime({
+  activityId,
+  userId,
+  participants,
+}: {
+  activityId: string;
+  userId: string;
+  participants: Participant[];
+}) {
+  const [myLog, setMyLog] = useState<ExerciseLogEntry[]>([]);
+  const [participantId, setParticipantId] = useState(participants[0]?.['Participant ID'] || '');
+  const [exerciseType, setExerciseType] = useState<ExerciseType>('Running');
+  const [dateTime, setDateTime] = useState(() => new Date().toISOString().slice(0, 16));
+  const [distanceKm, setDistanceKm] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  function loadLog() {
+    callHssApi<ExerciseLogEntry[]>('getMyExerciseLog', { activityId, userId }).then(setMyLog);
+  }
+
+  useEffect(() => {
+    loadLog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activityId]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!participantId || !distanceKm) {
+      setError('Please select who did the activity and enter the distance.');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      await callHssApi('logExerciseEntry', {
+        activityId,
+        userId,
+        participantId,
+        exerciseType,
+        dateTime,
+        distanceKm: Number(distanceKm),
+      });
+      setDistanceKm('');
+      loadLog();
+    } catch (err) {
+      setError('Could not save that entry. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function participantName(id: string) {
+    return participants.find((p) => p['Participant ID'] === id)?.['Participant Name'] || id;
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-ink">Who's doing this</span>
+          <select value={participantId} onChange={(e) => setParticipantId(e.target.value)} className="input">
+            {participants.map((p) => (
+              <option key={p['Participant ID']} value={p['Participant ID']}>
+                {p['Participant Name']}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-ink">Date &amp; time</span>
+          <input
+            type="datetime-local"
+            value={dateTime}
+            onChange={(e) => setDateTime(e.target.value)}
+            className="input"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-ink">Activity</span>
+          <select
+            value={exerciseType}
+            onChange={(e) => setExerciseType(e.target.value as ExerciseType)}
+            className="input"
+          >
+            <option value="Running">Running</option>
+            <option value="Cycling">Cycling</option>
+            <option value="Walking">Walking</option>
+            <option value="Swimming">Swimming</option>
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-ink">Distance (KM)</span>
+          <input
+            type="number"
+            min={0}
+            step="0.1"
+            value={distanceKm}
+            onChange={(e) => setDistanceKm(e.target.value)}
+            className="input"
+          />
+        </label>
+
+        {error && <p className="text-sm text-vermilion sm:col-span-2">{error}</p>}
+
+        <div className="sm:col-span-2">
+          <button type="submit" disabled={submitting} className="btn-primary">
+            {submitting ? 'Saving…' : "Log today's activity"}
+          </button>
+        </div>
+      </form>
+
+      {myLog.length > 0 && (
+        <div>
+          <h3 className="text-sm font-display font-semibold text-ink mb-2">Your progress</h3>
+          <div className="overflow-x-auto rounded-card border border-ink/10">
+            <table className="w-full text-sm">
+              <thead className="bg-paper-raised text-ink-muted text-xs uppercase tracking-wide">
+                <tr>
+                  <th className="text-left px-3 py-2">Date</th>
+                  <th className="text-left px-3 py-2">Person</th>
+                  <th className="text-left px-3 py-2">Activity</th>
+                  <th className="text-right px-3 py-2">KM</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myLog.map((l) => (
+                  <tr key={l['Log ID']} className="border-t border-ink/10">
+                    <td className="px-3 py-2 text-ink-light font-mono">{l['Date/Time']}</td>
+                    <td className="px-3 py-2 text-ink">{participantName(l['Participant ID'])}</td>
+                    <td className="px-3 py-2 text-ink-light">{l['Exercise Type']}</td>
+                    <td className="px-3 py-2 text-right text-ink">{l['Distance KM']}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Event (advance notice + RSVP)
+// ---------------------------------------------------------------------
+
+function EventRsvpPanel({
+  activity,
+  userId,
+  participants,
+}: {
+  activity: CommunityActivity;
+  userId: string;
+  participants: Participant[];
+}) {
+  const [responses, setResponses] = useState<Record<string, RsvpResponse | ''>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    callHssApi<ActivityRsvp[]>('getMyActivityRsvp', {
+      activityId: activity['Activity ID'],
+      userId,
+    }).then((rows) => {
+      const initial: Record<string, RsvpResponse | ''> = {};
+      participants.forEach((p) => {
+        const existing = rows.find((r) => r['Participant ID'] === p['Participant ID']);
+        initial[p['Participant ID']] = existing ? existing['Response'] : '';
+      });
+      setResponses(initial);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activity['Activity ID']]);
+
+  async function handleConfirm() {
+    setSubmitting(true);
+    setSaved(false);
+    try {
+      const entries = Object.entries(responses).filter(([, v]) => v);
+      for (const [participantId, response] of entries) {
+        await callHssApi('submitActivityRsvp', {
+          activityId: activity['Activity ID'],
+          userId,
+          participantId,
+          response,
+        });
+      }
+      setSaved(true);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="bg-paper-raised rounded-card border border-ink/10 p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        {activity['Start Date'] && <InfoRow label="Date" value={activity['Start Date']} />}
+        {activity['Event Time'] && <InfoRow label="Time" value={activity['Event Time']} />}
+        {activity['Location'] && <InfoRow label="Location" value={activity['Location']} />}
+        {activity['Dress Code'] && <InfoRow label="Dress" value={activity['Dress Code']} />}
+      </div>
+
+      {activity['Day Schedule'] && (
+        <div>
+          <h4 className="text-sm font-display font-semibold text-ink mb-1">Schedule for the day</h4>
+          <p className="text-sm text-ink-light whitespace-pre-line">{activity['Day Schedule']}</p>
+        </div>
+      )}
+
+      <div>
+        <h4 className="text-sm font-display font-semibold text-ink mb-2">Kindly confirm here</h4>
+        <div className="flex flex-col gap-2">
+          {participants.map((p) => (
+            <div key={p['Participant ID']} className="flex items-center justify-between gap-3">
+              <span className="text-sm text-ink">{p['Participant Name']}</span>
+              <select
+                value={responses[p['Participant ID']] || ''}
+                onChange={(e) =>
+                  setResponses((prev) => ({
+                    ...prev,
+                    [p['Participant ID']]: e.target.value as RsvpResponse,
+                  }))
+                }
+                className="input w-auto"
+              >
+                <option value="">Select…</option>
+                <option value="Yes">Joining</option>
+                <option value="Not Sure">Not sure</option>
+                <option value="No">Not joining</option>
+              </select>
+            </div>
+          ))}
+        </div>
+        <button onClick={handleConfirm} disabled={submitting} className="btn-primary mt-3">
+          {submitting ? 'Saving…' : 'Confirm'}
+        </button>
+        {saved && <p className="text-sm text-sage mt-2">Thanks — your response has been saved.</p>}
+      </div>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-ink-muted uppercase tracking-wide font-mono">{label}</p>
+      <p className="text-ink">{value}</p>
     </div>
   );
 }

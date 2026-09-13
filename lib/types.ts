@@ -171,16 +171,22 @@ export interface AreaOverviewRow {
 
 // --- Community Activities (My Shakha "Activities" card) ---
 // Separate from `Activity` above, which is the home-page activity cards.
+// 'Type' drives which panel renders: 'Reading Marathon' | 'Exercise Marathon' | 'Event'.
+// Event Time/Location/Dress Code/Day Schedule are only populated for 'Event' type activities.
 
 export interface CommunityActivity {
   'Activity ID': string;
   'Activity Name': string;
-  'Type': string; // e.g. 'Reading Marathon'
+  'Type': string; // 'Reading Marathon' | 'Exercise Marathon' | 'Event'
   'Description': string;
   'Start Date': string;
   'End Date': string;
   'Shakha ID': string;
-  'Status': 'Ongoing' | 'Historical'; // computed by the backend, not stored
+  'Status': 'Upcoming' | 'Ongoing' | 'Historical'; // computed by the backend, not stored
+  'Event Time'?: string;
+  'Location'?: string;
+  'Dress Code'?: string;
+  'Day Schedule'?: string;
 }
 
 export interface ActivityBook {
@@ -207,6 +213,35 @@ export interface ActivityLogEntry {
 export interface ActivityDetailBundle {
   activity: CommunityActivity;
   books: ActivityBook[];
+}
+
+// --- Exercise Marathon logging ---
+
+export type ExerciseType = 'Running' | 'Cycling' | 'Walking' | 'Swimming';
+
+export interface ExerciseLogEntry {
+  'Log ID': string;
+  'Activity ID': string;
+  'User ID': string;
+  'Participant ID': string;
+  'Date/Time': string;
+  'Exercise Type': ExerciseType;
+  'Distance KM': number;
+  'Created Date': string;
+}
+
+// --- Event RSVP ---
+
+export type RsvpResponse = 'Yes' | 'No' | 'Not Sure';
+
+export interface ActivityRsvp {
+  'RSVP ID': string;
+  'Activity ID': string;
+  'User ID': string;
+  'Participant ID': string;
+  'Response': RsvpResponse;
+  'Created Date': string;
+  'Last Updated': string;
 }
 
 // --- Activity Stats (Admin "Book Reading — Shakha Contribution" section) ---
