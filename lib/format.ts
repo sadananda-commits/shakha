@@ -41,6 +41,16 @@ export function formatDisplayDate(value: string): string {
   return `${day}${ordinalSuffix(day)} ${month} ${date.getFullYear()}`;
 }
 
+/** '2026-09-20' -> 'Sunday, 20th September 2026' */
+export function formatDisplayDateLong(value: string): string {
+  const date = parseApiDate(value);
+  if (!date) return value;
+  const day = date.getDate();
+  const weekday = date.toLocaleDateString('en-GB', { weekday: 'long' });
+  const month = date.toLocaleDateString('en-GB', { month: 'long' });
+  return `${weekday}, ${day}${ordinalSuffix(day)} ${month} ${date.getFullYear()}`;
+}
+
 /** '2026-09-13 10:57' -> '13th Sep 2026, 10:57 AM' */
 export function formatDisplayDateTime(value: string): string {
   const date = parseApiDate(value);
@@ -49,6 +59,32 @@ export function formatDisplayDateTime(value: string): string {
   const month = date.toLocaleDateString('en-GB', { month: 'short' });
   const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   return `${day}${ordinalSuffix(day)} ${month} ${date.getFullYear()}, ${time}`;
+}
+
+/**
+ * Formats a time value for display. Accepts either a bare time string
+ * ('10:57') or a full timestamp ('2026-09-13 10:57') and returns
+ * '10:57 AM' style output.
+ */
+export function formatDisplayTime(value: string): string {
+  if (!value) return value;
+  let h: number, m: number;
+
+  if (value.includes(' ') || value.includes('T')) {
+    const date = parseApiDate(value);
+    if (!date) return value;
+    h = date.getHours();
+    m = date.getMinutes();
+  } else {
+    const [hStr, mStr] = value.split(':');
+    h = parseInt(hStr, 10);
+    m = parseInt(mStr, 10);
+  }
+
+  if (isNaN(h) || isNaN(m)) return value;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
 }
 
 /**
