@@ -121,6 +121,16 @@ export default function CoordinatorSchedulePage() {
         </div>
 
         {selectedEntry && (
+          <EditScheduleDetails
+            key={selectedEntry['Schedule ID']}
+            userId={userId}
+            shakhaId={shakha['Shakha ID']}
+            entry={selectedEntry}
+            onSaved={refreshEntries}
+          />
+        )}
+
+        {selectedEntry && (
           <ActivityManager
             userId={userId}
             shakhaId={shakha['Shakha ID']}
@@ -162,6 +172,7 @@ function NewScheduleForm({
     Location: shakha.Venue || shakha.Address || '',
     Status: 'Scheduled',
     Notes: '',
+    'Day Schedule': '',
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -219,6 +230,18 @@ function NewScheduleForm({
         <span className="text-sm font-medium text-ink">Notes (optional)</span>
         <input value={form.Notes} onChange={(e) => setForm({ ...form, Notes: e.target.value })} className="input" />
       </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-ink">Day schedule (optional)</span>
+        <p className="text-xs text-ink-muted -mt-1">
+          One activity per line, e.g. "10:00 Start of Shakha: Shreya Ji" — shown as a table on My Shakha.
+        </p>
+        <textarea
+          value={form['Day Schedule']}
+          onChange={(e) => setForm({ ...form, 'Day Schedule': e.target.value })}
+          className="input min-h-[120px] font-mono text-sm"
+          placeholder={'10:00 Start of Shakha: Shreya Ji\n10.05 Warm up - Krish Ji\n10.50 Break'}
+        />
+      </label>
 
       {error && <p className="text-sm text-vermilion">{error}</p>}
 
@@ -231,6 +254,123 @@ function NewScheduleForm({
         </button>
       </div>
     </form>
+  );
+}
+
+function EditScheduleDetails({
+  userId,
+  shakhaId,
+  entry,
+  onSaved,
+}: {
+  userId: string;
+  shakhaId: string;
+  entry: ScheduleEntry;
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    Date: entry.Date,
+    Day: entry.Day,
+    'Start Time': entry['Start Time'],
+    'End Time': entry['End Time'],
+    Location: entry.Location,
+    Status: entry.Status,
+    Notes: entry.Notes,
+    'Day Schedule': entry['Day Schedule'] || '',
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSave() {
+    setSubmitting(true);
+    setSaved(false);
+    setError('');
+    try {
+      await callHssApi('coordinatorUpsertSchedule', {
+        userId,
+        shakhaId,
+        scheduleId: entry['Schedule ID'],
+        ...form,
+      });
+      setSaved(true);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof HssApiError ? err.message : 'Something went wrong.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="text-sm text-marigold-dark underline underline-offset-2 self-start">
+        Edit this date's details
+      </button>
+    );
+  }
+
+  return (
+    <div className="bg-paper-raised rounded-card border border-ink/10 p-5 sm:p-6 flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-display font-semibold text-ink">Edit date details</h3>
+        <button onClick={() => setOpen(false)} className="text-sm text-ink-light underline underline-offset-2">
+          Close
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-ink">Date</span>
+          <input type="date" value={form.Date} onChange={(e) => setForm({ ...form, Date: e.target.value })} className="input" />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-ink">Day</span>
+          <input value={form.Day} onChange={(e) => setForm({ ...form, Day: e.target.value })} className="input" />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-ink">Start time</span>
+          <input value={form['Start Time']} onChange={(e) => setForm({ ...form, 'Start Time': e.target.value })} className="input" />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-ink">End time</span>
+          <input value={form['End Time']} onChange={(e) => setForm({ ...form, 'End Time': e.target.value })} className="input" />
+        </label>
+      </div>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-ink">Location</span>
+        <input value={form.Location} onChange={(e) => setForm({ ...form, Location: e.target.value })} className="input" />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-ink">Status</span>
+        <select value={form.Status} onChange={(e) => setForm({ ...form, Status: e.target.value })} className="input">
+          <option value="Scheduled">Scheduled</option>
+          <option value="Special Event">Special Event</option>
+          <option value="Cancelled">Cancelled</option>
+          <option value="Completed">Completed</option>
+        </select>
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-ink">Notes</span>
+        <input value={form.Notes} onChange={(e) => setForm({ ...form, Notes: e.target.value })} className="input" />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-ink">Day schedule</span>
+        <p className="text-xs text-ink-muted -mt-1">One activity per line — shown as a table on My Shakha.</p>
+        <textarea
+          value={form['Day Schedule']}
+          onChange={(e) => setForm({ ...form, 'Day Schedule': e.target.value })}
+          className="input min-h-[140px] font-mono text-sm"
+        />
+      </label>
+
+      {error && <p className="text-sm text-vermilion">{error}</p>}
+
+      <button onClick={handleSave} disabled={submitting} className="btn-primary self-start">
+        {submitting ? 'Saving…' : 'Save details'}
+      </button>
+      {saved && !submitting && <p className="text-sm text-sage">Saved.</p>}
+    </div>
   );
 }
 

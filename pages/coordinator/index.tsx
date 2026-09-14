@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Layout from '@/components/Layout';
 import { callHssApi } from '@/lib/hssApi';
+import { formatDisplayDate } from '@/lib/format';
 import {
   CoordinatorDashboardBundle,
   DashboardBundle,
@@ -106,9 +107,14 @@ export default function CoordinatorPage() {
               {bundle.shakha['Shakha Name']}
             </h1>
           </div>
-          <Link href="/coordinator/schedule" className="btn-primary">
-            Manage Schedule
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/coordinator/schedule" className="btn-primary">
+              Manage Schedule
+            </Link>
+            <Link href="/coordinator/activities" className="btn-primary">
+              Manage Activities
+            </Link>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -123,7 +129,7 @@ export default function CoordinatorPage() {
         {bundle.nextSchedule && (
           <div className="bg-ink text-paper rounded-card p-5 sm:p-6">
             <p className="text-xs font-mono uppercase tracking-wide text-marigold mb-2">
-              Next Shakha — {bundle.nextSchedule.Date}
+              Next Shakha — {formatDisplayDate(bundle.nextSchedule.Date)}
             </p>
             <div className="flex gap-6 text-sm">
               <span>Going: <strong>{bundle.nextShakhaAttendance.going}</strong></span>
