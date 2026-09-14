@@ -17,6 +17,7 @@ export default function CoordinatorPage() {
   const [bundle, setBundle] = useState<CoordinatorDashboardBundle | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [query, setQuery] = useState('');
+  const [deniedReason, setDeniedReason] = useState('');
 
   useEffect(() => {
     const savedUserId = typeof window !== 'undefined' ? localStorage.getItem(SESSION_KEY) : null;
@@ -29,6 +30,7 @@ export default function CoordinatorPage() {
     callHssApi<DashboardBundle>('getMyDashboard', { userId: savedUserId })
       .then((dash) => {
         if (!dash.isCoordinator || !dash.shakha) {
+          setDeniedReason('Your account is not marked as a Shakha Coordinator.');
           setStatus('denied');
           return;
         }
@@ -40,7 +42,10 @@ export default function CoordinatorPage() {
           setStatus('ready');
         });
       })
-      .catch(() => setStatus('denied'));
+      .catch((err) => {
+        setDeniedReason(err instanceof Error ? err.message : 'Something went wrong.');
+        setStatus('denied');
+      });
   }, []);
 
   async function handleSearch(e: React.FormEvent) {
@@ -74,7 +79,7 @@ export default function CoordinatorPage() {
             Coordinator access required
           </h1>
           <p className="text-ink-muted mb-6">
-            This page is only available to Shakha Coordinators. Sign in from My Shakha first.
+            {deniedReason || 'This page is only available to Shakha Coordinators. Sign in from My Shakha first.'}
           </p>
           <Link href="/my-shakha" className="btn-primary inline-block">
             Go to My Shakha
