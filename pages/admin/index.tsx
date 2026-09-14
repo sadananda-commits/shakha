@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import BookReadingStats from '@/components/BookReadingStats';
+import ParticipationStats from '@/components/ParticipationStats';
 import { callHssApi, HssApiError } from '@/lib/hssApi';
-import { AdminSummary, AreaOverviewRow, Participant } from '@/lib/types';
+import {
+  AdminSummary,
+  AreaOverviewRow,
+  CountryParticipationStatsBundle,
+  Participant,
+  Shakha,
+} from '@/lib/types';
 
 const SESSION_KEY = 'hss_admin_email';
 
@@ -100,10 +107,30 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Participant[]>([]);
 
+  const [shakhas, setShakhas] = useState<Shakha[]>([]);
+  const [participationYear, setParticipationYear] = useState(String(new Date().getFullYear()));
+  const [participationShakhaId, setParticipationShakhaId] = useState('');
+  const [participationArea, setParticipationArea] = useState('');
+  const [participationStats, setParticipationStats] = useState<CountryParticipationStatsBundle | null>(null);
+  const [participationLoading, setParticipationLoading] = useState(false);
+
   useEffect(() => {
     callHssApi<AdminSummary>('getAdminSummary').then(setSummary).catch(() => {});
     callHssApi<AreaOverviewRow[]>('getAreaOverview').then(setAreas).catch(() => {});
+    callHssApi<Shakha[]>('getShakhas', { includeInactive: true }).then(setShakhas).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    setParticipationLoading(true);
+    callHssApi<CountryParticipationStatsBundle>('getCountryParticipationStats', {
+      year: participationYear,
+      shakhaId: participationShakhaId || undefined,
+      area: participationArea || undefined,
+    })
+      .then(setParticipationStats)
+      .catch(() => setParticipationStats(null))
+      .finally(() => setParticipationLoading(false));
+  }, [participationYear, participationShakhaId, participationArea]);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -187,6 +214,75 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       </div>
 
       <BookReadingStats />
+
+      <ParticipationStats
+        title="Denmark-Wide Participation"
+        year={participationYear}
+        onYearChange={setParticipationYear}
+        weekly={participationStats?.weekly ?? []}
+        cumulativeTotal={participationStats?.cumulativeTotal ?? 0}
+        composition={
+          participationStats?.composition ?? {
+            'Children Male': 0, 'Children Female': 0,
+            'Youth Male': 0, 'Youth Female': 0,
+            'Adult Male': 0, 'Adult Female': 0,
+            'Senior Male': 0, 'Senior Female': 0,
+          }
+        }
+        loading={participationLoading}
+        filters={
+          <>
+            <select
+              value={participationArea}
+              onChange={(e) => setParticipationArea(e.target.value)}
+              className="input w-auto"
+            >
+              <option value="">All Areas</option>
+              {Array.from(new Set(shakhas.map((s) => s.Area))).map((area) => (
+                <option key={area} value={area}>{area}</option>
+              ))}
+            </select>
+            <select
+              value={participationShakhaId}
+              onChange={(e) => setParticipationShakhaId(e.target.value)}
+              className="input w-auto"
+            >
+              <option value="">All Shakhas</option>
+              {shakhas.map((s) => (
+                <option key={s['Shakha ID']} value={s['Shakha ID']}>{s['Shakha Name']}</option>
+              ))}
+            </select>
+          </>
+        }
+      />
+
+      {participationStats && participationStats.byShakha.length > 0 && (
+        <div>
+          <h2 className="text-lg font-display font-semibold text-ink mb-3">
+            Participation by Shakha ({participationYear})
+          </h2>
+          <div className="overflow-x-auto rounded-card border border-ink/10">
+            <table className="w-full text-sm">
+              <thead className="bg-paper-raised text-ink-muted text-xs uppercase tracking-wide">
+                <tr>
+                  <th className="text-left px-4 py-2">Shakha</th>
+                  <th className="text-right px-4 py-2">Sessions Reported</th>
+                  <th className="text-right px-4 py-2">Total Attendance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {participationStats.byShakha.map((row) => (
+                  <tr key={row.shakhaId} className="border-t border-ink/10">
+                    <td className="px-4 py-2 text-ink">{row.shakhaName}</td>
+                    <td className="px-4 py-2 text-right text-ink-light">{row.reports}</td>
+                    <td className="px-4 py-2 text-right text-ink font-medium">{row.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div>
         <h2 className="text-lg font-display font-semibold text-ink mb-3">

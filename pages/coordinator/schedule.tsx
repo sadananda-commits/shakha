@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Layout from '@/components/Layout';
+import ParticipationReportForm from '@/components/ParticipationReportForm';
 import { callHssApi, HssApiError } from '@/lib/hssApi';
 import { formatDisplayDate, formatDisplayTime } from '@/lib/format';
 import { DashboardBundle, ScheduleActivity, ScheduleEntry, Shakha } from '@/lib/types';
 
 const SESSION_KEY = 'hss_user_id';
+
+/** 'yyyy-MM-dd' for today, using the browser's local date (not UTC). */
+function todayLocalDateString(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 export default function CoordinatorSchedulePage() {
   const [status, setStatus] = useState<'loading' | 'denied' | 'ready'>('loading');
@@ -127,6 +135,15 @@ export default function CoordinatorSchedulePage() {
             shakhaId={shakha['Shakha ID']}
             entry={selectedEntry}
             onSaved={refreshEntries}
+          />
+        )}
+
+        {selectedEntry && selectedEntry.Date <= todayLocalDateString() && (
+          <ParticipationReportForm
+            key={`pr-${selectedEntry['Schedule ID']}`}
+            userId={userId}
+            shakhaId={shakha['Shakha ID']}
+            scheduleId={selectedEntry['Schedule ID']}
           />
         )}
 

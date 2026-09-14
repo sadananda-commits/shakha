@@ -70,7 +70,7 @@ export interface ScheduleEntry {
   Status: 'Scheduled' | 'Cancelled' | 'Completed' | 'Special Event';
   Notes: string;
   'Publish Status'?: 'Draft' | 'Published';
-  'Day Schedule'?: string;
+  'Day Schedule'?: string; // free-form, time-per-line run-of-show text
 }
 
 export interface ScheduleActivity {
@@ -266,4 +266,63 @@ export interface ActivityStatsBundle {
     totalShakhas: number;
   };
   byShakha: ShakhaActivityStats[];
+}
+
+// --- Post-Shakha Participation Reporting ---
+
+export interface ParticipationReport {
+  'Report ID': string;
+  'Schedule ID': string;
+  'Shakha ID': string;
+  'Shakha Name': string;
+  'Date': string;
+  'Children Male': number;
+  'Children Female': number;
+  'Youth Male': number;
+  'Youth Female': number;
+  'Adult Male': number;
+  'Adult Female': number;
+  'Senior Male': number;
+  'Senior Female': number;
+  'Total': number;
+  'Submitted By User ID': string;
+  'Submitted Date': string;
+}
+
+export interface WeeklyParticipation {
+  scheduleId: string;
+  shakhaId: string;
+  shakhaName: string;
+  date: string;
+  total: number;
+  cumulativeTotal: number;
+}
+
+export interface ParticipationComposition {
+  'Children Male': number;
+  'Children Female': number;
+  'Youth Male': number;
+  'Youth Female': number;
+  'Adult Male': number;
+  'Adult Female': number;
+  'Senior Male': number;
+  'Senior Female': number;
+}
+
+export interface ParticipationStatsBundle {
+  year: string;
+  weekly: WeeklyParticipation[];
+  cumulativeTotal: number;
+  composition: ParticipationComposition;
+}
+
+export interface ShakhaParticipationTotal {
+  shakhaId: string;
+  shakhaName: string;
+  total: number;
+  reports: number;
+}
+
+export interface CountryParticipationStatsBundle extends ParticipationStatsBundle {
+  byShakha: ShakhaParticipationTotal[];
 }

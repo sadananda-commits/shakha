@@ -3,10 +3,12 @@ import Link from 'next/link';
 import Layout from '@/components/Layout';
 import { callHssApi } from '@/lib/hssApi';
 import { formatDisplayDate } from '@/lib/format';
+import ParticipationStats from '@/components/ParticipationStats';
 import {
   CoordinatorDashboardBundle,
   DashboardBundle,
   Participant,
+  ParticipationStatsBundle,
 } from '@/lib/types';
 
 const SESSION_KEY = 'hss_user_id';
@@ -18,6 +20,9 @@ export default function CoordinatorPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [query, setQuery] = useState('');
   const [deniedReason, setDeniedReason] = useState('');
+  const [participationYear, setParticipationYear] = useState(String(new Date().getFullYear()));
+  const [participationStats, setParticipationStats] = useState<ParticipationStatsBundle | null>(null);
+  const [participationLoading, setParticipationLoading] = useState(false);
 
   useEffect(() => {
     const savedUserId = typeof window !== 'undefined' ? localStorage.getItem(SESSION_KEY) : null;
@@ -47,6 +52,19 @@ export default function CoordinatorPage() {
         setStatus('denied');
       });
   }, []);
+
+  useEffect(() => {
+    if (!bundle || !userId) return;
+    setParticipationLoading(true);
+    callHssApi<ParticipationStatsBundle>('getMyParticipationStats', {
+      userId,
+      shakhaId: bundle.shakha['Shakha ID'],
+      year: participationYear,
+    })
+      .then(setParticipationStats)
+      .catch(() => setParticipationStats(null))
+      .finally(() => setParticipationLoading(false));
+  }, [bundle, userId, participationYear]);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -181,6 +199,23 @@ export default function CoordinatorPage() {
             </div>
           )}
         </div>
+
+        <ParticipationStats
+          title="Participation This Year"
+          year={participationYear}
+          onYearChange={setParticipationYear}
+          weekly={participationStats?.weekly ?? []}
+          cumulativeTotal={participationStats?.cumulativeTotal ?? 0}
+          composition={
+            participationStats?.composition ?? {
+              'Children Male': 0, 'Children Female': 0,
+              'Youth Male': 0, 'Youth Female': 0,
+              'Adult Male': 0, 'Adult Female': 0,
+              'Senior Male': 0, 'Senior Female': 0,
+            }
+          }
+          loading={participationLoading}
+        />
       </div>
     </Layout>
   );
