@@ -343,7 +343,11 @@ function EditScheduleDetails({
       </label>
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-ink">Status</span>
-        <select value={form.Status} onChange={(e) => setForm({ ...form, Status: e.target.value })} className="input">
+        <select
+          value={form.Status}
+          onChange={(e) => setForm({ ...form, Status: e.target.value as ScheduleEntry['Status'] })}
+          className="input"
+        >
           <option value="Scheduled">Scheduled</option>
           <option value="Special Event">Special Event</option>
           <option value="Cancelled">Cancelled</option>
