@@ -34,12 +34,20 @@ export default function Nav() {
           ))}
         </nav>
 
-        <Link
-          href="/admin"
-          className="text-sm font-medium px-4 py-2 rounded-card border border-ink/15 text-ink hover:border-ink/30 transition-colors"
-        >
-          Admin Login
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/coordinator"
+            className="text-sm font-medium px-4 py-2 rounded-card border border-ink/15 text-ink hover:border-ink/30 transition-colors"
+          >
+            Coordinator
+          </Link>
+          <Link
+            href="/admin"
+            className="text-sm font-medium px-4 py-2 rounded-card border border-ink/15 text-ink hover:border-ink/30 transition-colors"
+          >
+            Admin Login
+          </Link>
+        </div>
       </div>
 
       {/* mobile nav */}
@@ -57,6 +65,26 @@ export default function Nav() {
             {link.label}
           </Link>
         ))}
+        <Link
+          href="/coordinator"
+          className={
+            router.pathname === '/coordinator'
+              ? 'text-marigold-dark whitespace-nowrap'
+              : 'text-ink-light whitespace-nowrap'
+          }
+        >
+          Coordinator
+        </Link>
+        <Link
+          href="/admin"
+          className={
+            router.pathname === '/admin'
+              ? 'text-marigold-dark whitespace-nowrap'
+              : 'text-ink-light whitespace-nowrap'
+          }
+        >
+          Admin Login
+        </Link>
       </nav>
     </header>
   );
