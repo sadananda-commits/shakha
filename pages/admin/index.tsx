@@ -14,14 +14,37 @@ import {
 const SESSION_KEY = 'hss_admin_email';
 
 export default function AdminPage() {
+  const [status, setStatus] = useState<'checking' | 'loggedOut' | 'loggedIn'>('checking');
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? localStorage.getItem(SESSION_KEY) : null;
-    if (saved) setAdminEmail(saved);
+    if (!saved) {
+      setStatus('loggedOut');
+      return;
+    }
+    // Re-verify against the backend on every load — a leftover or
+    // manually-set localStorage value must never grant access on its own.
+    callHssApi('getAdminSummary', { adminEmail: saved })
+      .then(() => {
+        setAdminEmail(saved);
+        setStatus('loggedIn');
+      })
+      .catch(() => {
+        localStorage.removeItem(SESSION_KEY);
+        setStatus('loggedOut');
+      });
   }, []);
 
-  if (!adminEmail) {
+  if (status === 'checking') {
+    return (
+      <Layout>
+        <div className="max-w-sm mx-auto px-4 sm:px-6 py-16 text-ink-muted">Loading…</div>
+      </Layout>
+    );
+  }
+
+  if (status === 'loggedOut' || !adminEmail) {
     return (
       <Layout>
         <div className="max-w-sm mx-auto px-4 sm:px-6 py-16">
@@ -29,6 +52,7 @@ export default function AdminPage() {
             onSuccess={(email) => {
               localStorage.setItem(SESSION_KEY, email);
               setAdminEmail(email);
+              setStatus('loggedIn');
             }}
           />
         </div>
@@ -40,9 +64,11 @@ export default function AdminPage() {
     <Layout>
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
         <AdminDashboard
+          adminEmail={adminEmail}
           onLogout={() => {
             localStorage.removeItem(SESSION_KEY);
             setAdminEmail(null);
+            setStatus('loggedOut');
           }}
         />
       </div>
@@ -101,7 +127,7 @@ function AdminLoginForm({ onSuccess }: { onSuccess: (email: string) => void }) {
   );
 }
 
-function AdminDashboard({ onLogout }: { onLogout: () => void }) {
+function AdminDashboard({ adminEmail, onLogout }: { adminEmail: string; onLogout: () => void }) {
   const [summary, setSummary] = useState<AdminSummary | null>(null);
   const [areas, setAreas] = useState<AreaOverviewRow[]>([]);
   const [query, setQuery] = useState('');
@@ -115,14 +141,15 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [participationLoading, setParticipationLoading] = useState(false);
 
   useEffect(() => {
-    callHssApi<AdminSummary>('getAdminSummary').then(setSummary).catch(() => {});
-    callHssApi<AreaOverviewRow[]>('getAreaOverview').then(setAreas).catch(() => {});
+    callHssApi<AdminSummary>('getAdminSummary', { adminEmail }).then(setSummary).catch(() => {});
+    callHssApi<AreaOverviewRow[]>('getAreaOverview', { adminEmail }).then(setAreas).catch(() => {});
     callHssApi<Shakha[]>('getShakhas', { includeInactive: true }).then(setShakhas).catch(() => {});
-  }, []);
+  }, [adminEmail]);
 
   useEffect(() => {
     setParticipationLoading(true);
     callHssApi<CountryParticipationStatsBundle>('getCountryParticipationStats', {
+      adminEmail,
       year: participationYear,
       shakhaId: participationShakhaId || undefined,
       area: participationArea || undefined,
@@ -130,12 +157,12 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       .then(setParticipationStats)
       .catch(() => setParticipationStats(null))
       .finally(() => setParticipationLoading(false));
-  }, [participationYear, participationShakhaId, participationArea]);
+  }, [adminEmail, participationYear, participationShakhaId, participationArea]);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const rows = await callHssApi<Participant[]>('searchParticipants', { query });
+      const rows = await callHssApi<Participant[]>('searchParticipants', { adminEmail, query });
       setResults(rows);
     } catch {
       setResults([]);

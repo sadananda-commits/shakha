@@ -276,14 +276,10 @@ export interface ParticipationReport {
   'Shakha ID': string;
   'Shakha Name': string;
   'Date': string;
-  'Children Male': number;
-  'Children Female': number;
-  'Youth Male': number;
-  'Youth Female': number;
-  'Adult Male': number;
-  'Adult Female': number;
-  'Senior Male': number;
-  'Senior Female': number;
+  'Swayamsevaka': number;
+  'Bal': number;
+  'Swayamsevak': number;
+  'Jestha': number;
   'Total': number;
   'Submitted By User ID': string;
   'Submitted Date': string;
@@ -299,14 +295,10 @@ export interface WeeklyParticipation {
 }
 
 export interface ParticipationComposition {
-  'Children Male': number;
-  'Children Female': number;
-  'Youth Male': number;
-  'Youth Female': number;
-  'Adult Male': number;
-  'Adult Female': number;
-  'Senior Male': number;
-  'Senior Female': number;
+  'Swayamsevaka': number;
+  'Bal': number;
+  'Swayamsevak': number;
+  'Jestha': number;
 }
 
 export interface ParticipationStatsBundle {

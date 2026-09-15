@@ -12,12 +12,7 @@ import {
 import { ParticipationComposition, WeeklyParticipation } from '@/lib/types';
 import { formatDisplayDate } from '@/lib/format';
 
-const COMPOSITION_ROWS: { key: string; label: string }[] = [
-  { key: 'Children', label: 'Children (0–12)' },
-  { key: 'Youth', label: 'Youth (13–18)' },
-  { key: 'Adult', label: 'Adult (19–59)' },
-  { key: 'Senior', label: 'Senior (60+)' },
-];
+const CATEGORIES = ['Swayamsevaka', 'Bal', 'Swayamsevak', 'Jestha'] as const;
 
 export default function ParticipationStats({
   title,
@@ -112,29 +107,23 @@ export default function ParticipationStats({
             <h3 className="text-sm font-display font-semibold text-ink mb-3">
               Composition ({year} total)
             </h3>
-            <div className="overflow-x-auto rounded-card border border-ink/10">
+            <div className="overflow-x-auto rounded-card border border-ink/10 max-w-sm">
               <table className="w-full text-sm">
                 <thead className="bg-paper-raised text-ink-muted text-xs uppercase tracking-wide">
                   <tr>
-                    <th className="text-left px-4 py-2">Age group</th>
-                    <th className="text-right px-4 py-2">Male</th>
-                    <th className="text-right px-4 py-2">Female</th>
-                    <th className="text-right px-4 py-2">Total</th>
+                    <th className="text-left px-4 py-2">Category</th>
+                    <th className="text-right px-4 py-2">Count</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {COMPOSITION_ROWS.map((row) => {
-                    const male = composition[`${row.key} Male` as keyof ParticipationComposition] || 0;
-                    const female = composition[`${row.key} Female` as keyof ParticipationComposition] || 0;
-                    return (
-                      <tr key={row.key} className="border-t border-ink/10">
-                        <td className="px-4 py-2 text-ink">{row.label}</td>
-                        <td className="px-4 py-2 text-right text-ink-light">{male}</td>
-                        <td className="px-4 py-2 text-right text-ink-light">{female}</td>
-                        <td className="px-4 py-2 text-right text-ink font-medium">{male + female}</td>
-                      </tr>
-                    );
-                  })}
+                  {CATEGORIES.map((cat) => (
+                    <tr key={cat} className="border-t border-ink/10">
+                      <td className="px-4 py-2 text-ink">{cat}</td>
+                      <td className="px-4 py-2 text-right text-ink font-medium">
+                        {composition[cat] || 0}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

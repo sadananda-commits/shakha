@@ -2,22 +2,12 @@ import { useEffect, useState } from 'react';
 import { callHssApi, HssApiError } from '@/lib/hssApi';
 import { ParticipationReport } from '@/lib/types';
 
-const AGE_GROUPS: { key: string; label: string }[] = [
-  { key: 'Children', label: 'Children (0–12)' },
-  { key: 'Youth', label: 'Youth (13–18)' },
-  { key: 'Adult', label: 'Adult (19–59)' },
-  { key: 'Senior', label: 'Senior (60+)' },
-];
+const CATEGORIES = ['Swayamsevaka', 'Bal', 'Swayamsevak', 'Jestha'] as const;
 
-type Counts = Record<string, string>; // e.g. "Children Male" -> "3"
+type Counts = Record<(typeof CATEGORIES)[number], string>;
 
 function emptyCounts(): Counts {
-  const c: Counts = {};
-  AGE_GROUPS.forEach((g) => {
-    c[`${g.key} Male`] = '';
-    c[`${g.key} Female`] = '';
-  });
-  return c;
+  return { Swayamsevaka: '', Bal: '', Swayamsevak: '', Jestha: '' };
 }
 
 export default function ParticipationReportForm({
@@ -44,12 +34,12 @@ export default function ParticipationReportForm({
       .then((report) => {
         setExisting(report);
         if (report) {
-          const c: Counts = {};
-          AGE_GROUPS.forEach((g) => {
-            c[`${g.key} Male`] = String(report[`${g.key} Male` as keyof ParticipationReport] ?? '');
-            c[`${g.key} Female`] = String(report[`${g.key} Female` as keyof ParticipationReport] ?? '');
+          setCounts({
+            Swayamsevaka: String(report['Swayamsevaka'] ?? ''),
+            Bal: String(report['Bal'] ?? ''),
+            Swayamsevak: String(report['Swayamsevak'] ?? ''),
+            Jestha: String(report['Jestha'] ?? ''),
           });
-          setCounts(c);
         }
       })
       .finally(() => setLoading(false));
@@ -64,15 +54,14 @@ export default function ParticipationReportForm({
     setSaved(false);
     setError('');
     try {
-      const numericCounts: Record<string, number> = {};
-      Object.entries(counts).forEach(([k, v]) => {
-        numericCounts[k] = Number(v) || 0;
-      });
       await callHssApi('submitParticipationReport', {
         userId,
         shakhaId,
         scheduleId,
-        ...numericCounts,
+        Swayamsevaka: Number(counts.Swayamsevaka) || 0,
+        Bal: Number(counts.Bal) || 0,
+        Swayamsevak: Number(counts.Swayamsevak) || 0,
+        Jestha: Number(counts.Jestha) || 0,
       });
       setSaved(true);
     } catch (err) {
@@ -103,50 +92,30 @@ export default function ParticipationReportForm({
           Close
         </button>
       </div>
-      <p className="text-xs text-ink-muted -mt-1">
-        Headcount of who actually attended, by age group and gender.
-      </p>
+      <p className="text-xs text-ink-muted -mt-1">Number of attendees by category.</p>
 
       {loading ? (
         <p className="text-ink-muted text-sm">Loading…</p>
       ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-ink-muted text-xs uppercase tracking-wide">
-                <tr>
-                  <th className="text-left py-1">Age group</th>
-                  <th className="text-left py-1 px-2">Male</th>
-                  <th className="text-left py-1 px-2">Female</th>
+          <table className="w-full text-sm max-w-xs">
+            <tbody>
+              {CATEGORIES.map((cat) => (
+                <tr key={cat} className="border-t border-ink/10 first:border-t-0">
+                  <td className="py-2 pr-3 text-ink font-medium">{cat}</td>
+                  <td className="py-2">
+                    <input
+                      type="number"
+                      min={0}
+                      value={counts[cat]}
+                      onChange={(e) => setCounts({ ...counts, [cat]: e.target.value })}
+                      className="input w-24"
+                    />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {AGE_GROUPS.map((g) => (
-                  <tr key={g.key} className="border-t border-ink/10">
-                    <td className="py-2 pr-3 text-ink">{g.label}</td>
-                    <td className="py-2 px-2">
-                      <input
-                        type="number"
-                        min={0}
-                        value={counts[`${g.key} Male`]}
-                        onChange={(e) => setCounts({ ...counts, [`${g.key} Male`]: e.target.value })}
-                        className="input w-20"
-                      />
-                    </td>
-                    <td className="py-2 px-2">
-                      <input
-                        type="number"
-                        min={0}
-                        value={counts[`${g.key} Female`]}
-                        onChange={(e) => setCounts({ ...counts, [`${g.key} Female`]: e.target.value })}
-                        className="input w-20"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
 
           <p className="text-sm text-ink">
             Total: <span className="font-semibold">{total}</span>

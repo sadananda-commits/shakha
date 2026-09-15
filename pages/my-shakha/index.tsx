@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import Layout from '@/components/Layout';
 import NextShakhaCard from '@/components/NextShakhaCard';
 import ActivitiesCard from '@/components/ActivitiesCard';
@@ -15,6 +14,7 @@ import {
 } from '@/lib/types';
 
 type View = 'loading' | 'login' | 'register' | 'dashboard';
+type Section = 'next' | 'activities' | 'profile' | 'participants';
 
 const SESSION_KEY = 'hss_user_id';
 
@@ -52,7 +52,13 @@ export default function MyShakhaPage() {
 
   return (
     <Layout>
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12">
+      <div
+        className={
+          view === 'dashboard'
+            ? 'max-w-5xl mx-auto px-4 sm:px-6 py-12'
+            : 'max-w-2xl mx-auto px-4 sm:px-6 py-12'
+        }
+      >
         {view === 'loading' && <p className="text-ink-muted">Loading…</p>}
 
         {view === 'login' && (
@@ -303,6 +309,13 @@ function RegisterForm({
   );
 }
 
+const NAV_ITEMS: { key: Section; label: string }[] = [
+  { key: 'next', label: 'Next Shakha' },
+  { key: 'activities', label: 'Activities' },
+  { key: 'profile', label: 'My Profile' },
+  { key: 'participants', label: 'My Participants' },
+];
+
 function Dashboard({
   dashboard,
   onLogout,
@@ -312,16 +325,16 @@ function Dashboard({
   onLogout: () => void;
   onRefresh: () => void;
 }) {
-  const { user, shakha, nextSchedule, scheduleActivities, participants, attendance, isCoordinator } = dashboard;
+  const { user, shakha, nextSchedule, scheduleActivities, participants, attendance } = dashboard;
+  const [section, setSection] = useState<Section>('next');
   const [addingParticipant, setAddingParticipant] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'participants' | null>(null);
 
   const initialResponses: Record<string, AttendanceResponse> = {};
   attendance.forEach((a) => {
     initialResponses[a['Participant ID']] = a['Attendance Response'];
   });
 
-  async function handleSubmit(responses: Record<string, AttendanceResponse>) {
+  async function handleAttendanceSubmit(responses: Record<string, AttendanceResponse>) {
     if (!nextSchedule) return;
     await callHssApi('submitAttendance', {
       scheduleId: nextSchedule['Schedule ID'],
@@ -331,6 +344,7 @@ function Dashboard({
         response,
       })),
     });
+    onRefresh();
   }
 
   return (
@@ -349,116 +363,90 @@ function Dashboard({
         </button>
       </div>
 
-      {isCoordinator && (
-        <Link
-          href="/coordinator"
-          className="flex items-center justify-between bg-ink text-paper rounded-card px-5 py-4"
-        >
-          <span className="font-medium">Shakha Coordinator Dashboard</span>
-          <span aria-hidden="true">→</span>
-        </Link>
-      )}
-
-      <NextShakhaCard
-        shakha={shakha}
-        schedule={nextSchedule}
-        participants={participants}
-        initialResponses={initialResponses}
-        onSubmitAttendance={async (r) => {
-          await handleSubmit(r);
-          onRefresh();
-        }}
-      />
-
-      <ActivitiesCard userId={user['User ID']} participants={participants} />
-
-      {nextSchedule && scheduleActivities.length > 0 && (
-        <div>
-          <h3 className="font-display text-lg font-semibold text-ink mb-3">Schedule</h3>
-          <ScheduleActivitiesTable activities={scheduleActivities} />
-        </div>
-      )}
-
-      <div className="bg-paper-raised rounded-card border border-ink/10 overflow-hidden">
-        <div className="flex border-b border-ink/10">
-          <TabButton
-            label="My Profile"
-            active={activeTab === 'profile'}
-            onClick={() => setActiveTab((t) => (t === 'profile' ? null : 'profile'))}
-          />
-          <TabButton
-            label="My Participants"
-            active={activeTab === 'participants'}
-            onClick={() => setActiveTab((t) => (t === 'participants' ? null : 'participants'))}
-          />
-        </div>
-
-        {activeTab === 'profile' && (
-          <div className="p-5 sm:p-6">
-            <ProfileCard user={user} onUpdated={onRefresh} bare />
+      <div className="flex flex-col sm:flex-row gap-6">
+        <nav className="sm:w-52 flex-shrink-0">
+          <div className="flex sm:flex-col gap-1 overflow-x-auto sm:overflow-visible pb-1 sm:pb-0">
+            {NAV_ITEMS.map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setSection(item.key)}
+                className={`text-left px-4 py-2.5 rounded-card whitespace-nowrap text-sm font-medium transition-colors ${
+                  section === item.key
+                    ? 'bg-ink text-paper'
+                    : 'text-ink-light hover:bg-paper-raised'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
-        )}
+        </nav>
 
-        {activeTab === 'participants' && (
-          <div className="p-5 sm:p-6 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-display text-lg font-semibold text-ink">My Participants</h3>
-              {!addingParticipant && (
-                <button
-                  onClick={() => setAddingParticipant(true)}
-                  className="text-sm text-marigold-dark underline underline-offset-2"
-                >
-                  + Add Participant
-                </button>
-              )}
-            </div>
-            <ul className="flex flex-col gap-2">
-              {participants.map((p) => (
-                <li key={p['Participant ID']} className="flex justify-between text-sm">
-                  <span className="text-ink">{p['Participant Name']}</span>
-                  <span className="text-ink-muted">{p.Relationship}</span>
-                </li>
-              ))}
-            </ul>
-
-            {addingParticipant && (
-              <AddParticipantForm
-                userId={user['User ID']}
-                onAdded={() => {
-                  setAddingParticipant(false);
-                  onRefresh();
-                }}
-                onCancel={() => setAddingParticipant(false)}
+        <div className="flex-1 min-w-0 flex flex-col gap-6">
+          {section === 'next' && (
+            <>
+              <NextShakhaCard
+                shakha={shakha}
+                schedule={nextSchedule}
+                participants={participants}
+                initialResponses={initialResponses}
+                onSubmitAttendance={handleAttendanceSubmit}
               />
-            )}
-          </div>
-        )}
+
+              {nextSchedule && scheduleActivities.length > 0 && (
+                <div>
+                  <h3 className="font-display text-lg font-semibold text-ink mb-3">Schedule</h3>
+                  <ScheduleActivitiesTable activities={scheduleActivities} />
+                </div>
+              )}
+            </>
+          )}
+
+          {section === 'activities' && (
+            <ActivitiesCard userId={user['User ID']} participants={participants} />
+          )}
+
+          {section === 'profile' && <ProfileCard user={user} onUpdated={onRefresh} />}
+
+          {section === 'participants' && (
+            <>
+              <div className="bg-paper-raised rounded-card border border-ink/10 p-5 sm:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-display text-lg font-semibold text-ink">My Participants</h3>
+                  {!addingParticipant && (
+                    <button
+                      onClick={() => setAddingParticipant(true)}
+                      className="text-sm text-marigold-dark underline underline-offset-2"
+                    >
+                      + Add Participant
+                    </button>
+                  )}
+                </div>
+                <ul className="flex flex-col gap-2">
+                  {participants.map((p) => (
+                    <li key={p['Participant ID']} className="flex justify-between text-sm">
+                      <span className="text-ink">{p['Participant Name']}</span>
+                      <span className="text-ink-muted">{p.Relationship}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {addingParticipant && (
+                <AddParticipantForm
+                  userId={user['User ID']}
+                  onAdded={() => {
+                    setAddingParticipant(false);
+                    onRefresh();
+                  }}
+                  onCancel={() => setAddingParticipant(false)}
+                />
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
-  );
-}
-
-function TabButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-        active
-          ? 'border-marigold-dark text-ink'
-          : 'border-transparent text-ink-muted hover:text-ink-light'
-      }`}
-    >
-      {label}
-    </button>
   );
 }
 
