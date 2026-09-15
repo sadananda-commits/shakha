@@ -1,224 +1,359 @@
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import Layout from '@/components/Layout';
-import { callHssApi } from '@/lib/hssApi';
-import { formatDisplayDate } from '@/lib/format';
+import BookReadingStats from '@/components/BookReadingStats';
 import ParticipationStats from '@/components/ParticipationStats';
+import { callHssApi, HssApiError } from '@/lib/hssApi';
 import {
-  CoordinatorDashboardBundle,
-  DashboardBundle,
+  AdminSummary,
+  AreaOverviewRow,
+  CountryParticipationStatsBundle,
   Participant,
-  ParticipationStatsBundle,
+  Shakha,
 } from '@/lib/types';
 
-const SESSION_KEY = 'hss_user_id';
+const SESSION_KEY = 'hss_admin_email';
 
-export default function CoordinatorPage() {
-  const [status, setStatus] = useState<'loading' | 'denied' | 'ready'>('loading');
-  const [userId, setUserId] = useState('');
-  const [bundle, setBundle] = useState<CoordinatorDashboardBundle | null>(null);
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [query, setQuery] = useState('');
-  const [deniedReason, setDeniedReason] = useState('');
-  const [participationYear, setParticipationYear] = useState(String(new Date().getFullYear()));
-  const [participationStats, setParticipationStats] = useState<ParticipationStatsBundle | null>(null);
-  const [participationLoading, setParticipationLoading] = useState(false);
+export default function AdminPage() {
+  const [status, setStatus] = useState<'checking' | 'loggedOut' | 'loggedIn'>('checking');
+  const [adminEmail, setAdminEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    const savedUserId = typeof window !== 'undefined' ? localStorage.getItem(SESSION_KEY) : null;
-    if (!savedUserId) {
-      setStatus('denied');
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(SESSION_KEY) : null;
+    if (!saved) {
+      setStatus('loggedOut');
       return;
     }
-    setUserId(savedUserId);
-
-    callHssApi<DashboardBundle>('getMyDashboard', { userId: savedUserId })
-      .then((dash) => {
-        if (!dash.isCoordinator || !dash.shakha) {
-          setDeniedReason('Your account is not marked as a Shakha Coordinator.');
-          setStatus('denied');
-          return;
-        }
-        return callHssApi<CoordinatorDashboardBundle>('getCoordinatorDashboard', {
-          userId: savedUserId,
-          shakhaId: dash.shakha['Shakha ID'],
-        }).then((cd) => {
-          setBundle(cd);
-          setStatus('ready');
-        });
+    // Re-verify against the backend on every load — a leftover or
+    // manually-set localStorage value must never grant access on its own.
+    callHssApi('getAdminSummary', { adminEmail: saved })
+      .then(() => {
+        setAdminEmail(saved);
+        setStatus('loggedIn');
       })
-      .catch((err) => {
-        setDeniedReason(err instanceof Error ? err.message : 'Something went wrong.');
-        setStatus('denied');
+      .catch(() => {
+        localStorage.removeItem(SESSION_KEY);
+        setStatus('loggedOut');
       });
   }, []);
 
+  if (status === 'checking') {
+    return (
+      <Layout>
+        <div className="max-w-sm mx-auto px-4 sm:px-6 py-16 text-ink-muted">Loading…</div>
+      </Layout>
+    );
+  }
+
+  if (status === 'loggedOut' || !adminEmail) {
+    return (
+      <Layout>
+        <div className="max-w-sm mx-auto px-4 sm:px-6 py-16">
+          <AdminLoginForm
+            onSuccess={(email) => {
+              localStorage.setItem(SESSION_KEY, email);
+              setAdminEmail(email);
+              setStatus('loggedIn');
+            }}
+          />
+        </div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout>
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
+        <AdminDashboard
+          adminEmail={adminEmail}
+          onLogout={() => {
+            localStorage.removeItem(SESSION_KEY);
+            setAdminEmail(null);
+            setStatus('loggedOut');
+          }}
+        />
+      </div>
+    </Layout>
+  );
+}
+
+function AdminLoginForm({ onSuccess }: { onSuccess: (email: string) => void }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError('');
+    try {
+      await callHssApi('adminLogin', { email, password });
+      onSuccess(email);
+    } catch (err) {
+      setError(err instanceof HssApiError ? err.message : 'Something went wrong.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <h1 className="text-2xl font-display font-semibold text-ink">Admin Login</h1>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-ink">Email</span>
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="input"
+        />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-ink">Password</span>
+        <input
+          type="password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="input"
+        />
+      </label>
+      {error && <p className="text-sm text-vermilion">{error}</p>}
+      <button type="submit" disabled={submitting} className="btn-primary">
+        {submitting ? 'Signing in…' : 'Sign in'}
+      </button>
+    </form>
+  );
+}
+
+function AdminDashboard({ adminEmail, onLogout }: { adminEmail: string; onLogout: () => void }) {
+  const [summary, setSummary] = useState<AdminSummary | null>(null);
+  const [areas, setAreas] = useState<AreaOverviewRow[]>([]);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Participant[]>([]);
+
+  const [shakhas, setShakhas] = useState<Shakha[]>([]);
+  const [participationYear, setParticipationYear] = useState(String(new Date().getFullYear()));
+  const [participationShakhaId, setParticipationShakhaId] = useState('');
+  const [participationArea, setParticipationArea] = useState('');
+  const [participationStats, setParticipationStats] = useState<CountryParticipationStatsBundle | null>(null);
+  const [participationLoading, setParticipationLoading] = useState(false);
+
   useEffect(() => {
-    if (!bundle || !userId) return;
+    callHssApi<AdminSummary>('getAdminSummary', { adminEmail }).then(setSummary).catch(() => {});
+    callHssApi<AreaOverviewRow[]>('getAreaOverview', { adminEmail }).then(setAreas).catch(() => {});
+    callHssApi<Shakha[]>('getShakhas', { includeInactive: true }).then(setShakhas).catch(() => {});
+  }, [adminEmail]);
+
+  useEffect(() => {
     setParticipationLoading(true);
-    callHssApi<ParticipationStatsBundle>('getMyParticipationStats', {
-      userId,
-      shakhaId: bundle.shakha['Shakha ID'],
+    callHssApi<CountryParticipationStatsBundle>('getCountryParticipationStats', {
+      adminEmail,
       year: participationYear,
+      shakhaId: participationShakhaId || undefined,
+      area: participationArea || undefined,
     })
       .then(setParticipationStats)
       .catch(() => setParticipationStats(null))
       .finally(() => setParticipationLoading(false));
-  }, [bundle, userId, participationYear]);
+  }, [adminEmail, participationYear, participationShakhaId, participationArea]);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    if (!bundle) return;
     try {
-      const rows = await callHssApi<Participant[]>('getShakhaParticipants', {
-        userId,
-        shakhaId: bundle.shakha['Shakha ID'],
-        query,
-      });
-      setParticipants(rows);
+      const rows = await callHssApi<Participant[]>('searchParticipants', { adminEmail, query });
+      setResults(rows);
     } catch {
-      setParticipants([]);
+      setResults([]);
     }
   }
 
-  if (status === 'loading') {
-    return (
-      <Layout>
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 text-ink-muted">Loading…</div>
-      </Layout>
-    );
-  }
-
-  if (status === 'denied') {
-    return (
-      <Layout>
-        <div className="max-w-md mx-auto px-4 sm:px-6 py-16 text-center">
-          <h1 className="text-xl font-display font-semibold text-ink mb-2">
-            Coordinator access required
-          </h1>
-          <p className="text-ink-muted mb-6">
-            {deniedReason || 'This page is only available to Shakha Coordinators. Sign in from My Shakha first.'}
-          </p>
-          <Link href="/my-shakha" className="btn-primary inline-block">
-            Go to My Shakha
-          </Link>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (!bundle) return null;
-
-  const cards = [
-    { label: 'Total Participants', value: bundle.summary.totalParticipants },
-    { label: 'Adults', value: bundle.summary.adults },
-    { label: 'Children', value: bundle.summary.children },
-    { label: 'Families', value: bundle.summary.families },
-    { label: 'New (30 days)', value: bundle.summary.newParticipants },
-    { label: 'Sessions Conducted', value: bundle.sessionsConducted },
-  ];
+  const cards = summary
+    ? [
+        { label: 'Total Users', value: summary.totalUsers },
+        { label: 'Total Participants', value: summary.totalParticipants },
+        { label: 'Total Shakhas', value: summary.totalShakhas },
+        { label: 'Total Areas', value: summary.totalAreas },
+        { label: 'Confirmed for Next Shakha', value: summary.confirmedForNextShakha, accent: 'sage' },
+        { label: 'Not Attending', value: summary.notAttending, accent: 'vermilion' },
+        { label: 'Not Sure', value: summary.notSure, accent: 'marigold' },
+        { label: 'No Response', value: summary.noResponse },
+      ]
+    : [];
 
   return (
-    <Layout>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12 flex flex-col gap-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-mono uppercase tracking-wide text-marigold-dark">
-              Coordinator Dashboard
+    <div className="flex flex-col gap-8">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-display font-semibold text-ink">Admin Dashboard</h1>
+        <button onClick={onLogout} className="text-sm text-ink-light underline underline-offset-2">
+          Sign out
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {cards.map((c) => (
+          <div key={c.label} className="bg-paper-raised rounded-card border border-ink/10 p-4">
+            <p
+              className={`text-2xl font-display font-semibold ${
+                c.accent === 'sage'
+                  ? 'text-sage'
+                  : c.accent === 'vermilion'
+                  ? 'text-vermilion'
+                  : c.accent === 'marigold'
+                  ? 'text-marigold-dark'
+                  : 'text-ink'
+              }`}
+            >
+              {c.value}
             </p>
-            <h1 className="text-2xl font-display font-semibold text-ink">
-              {bundle.shakha['Shakha Name']}
-            </h1>
+            <p className="text-xs text-ink-muted mt-1">{c.label}</p>
           </div>
-          <div className="flex gap-2">
-            <Link href="/coordinator/schedule" className="btn-primary">
-              Manage Schedule
-            </Link>
-            <Link href="/coordinator/activities" className="btn-primary">
-              Manage Activities
-            </Link>
+        ))}
+      </div>
+
+      <div>
+        <h2 className="text-lg font-display font-semibold text-ink mb-3">
+          Denmark-Wide Overview
+        </h2>
+        <div className="overflow-x-auto rounded-card border border-ink/10">
+          <table className="w-full text-sm">
+            <thead className="bg-paper-raised text-ink-muted text-xs uppercase tracking-wide">
+              <tr>
+                <th className="text-left px-4 py-2">Area</th>
+                <th className="text-right px-4 py-2">Shakhas</th>
+                <th className="text-right px-4 py-2">Participants</th>
+                <th className="text-right px-4 py-2">Confirmed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {areas.map((a) => (
+                <tr key={a.area} className="border-t border-ink/10">
+                  <td className="px-4 py-2 text-ink">{a.area}</td>
+                  <td className="px-4 py-2 text-right">{a.shakhas}</td>
+                  <td className="px-4 py-2 text-right">{a.participants}</td>
+                  <td className="px-4 py-2 text-right">{a.confirmed}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <BookReadingStats />
+
+      <ParticipationStats
+        title="Denmark-Wide Participation"
+        year={participationYear}
+        onYearChange={setParticipationYear}
+        weekly={participationStats?.weekly ?? []}
+        cumulativeTotal={participationStats?.cumulativeTotal ?? 0}
+        composition={
+          participationStats?.composition ?? {
+            Shishu: 0,
+            Bal: 0,
+            Kishore: 0,
+            Tarun: 0,
+            Praudh: 0,
+            Jestha: 0,
+          }
+        }
+        loading={participationLoading}
+        filters={
+          <>
+            <select
+              value={participationArea}
+              onChange={(e) => setParticipationArea(e.target.value)}
+              className="input w-auto"
+            >
+              <option value="">All Areas</option>
+              {Array.from(new Set(shakhas.map((s) => s.Area))).map((area) => (
+                <option key={area} value={area}>{area}</option>
+              ))}
+            </select>
+            <select
+              value={participationShakhaId}
+              onChange={(e) => setParticipationShakhaId(e.target.value)}
+              className="input w-auto"
+            >
+              <option value="">All Shakhas</option>
+              {shakhas.map((s) => (
+                <option key={s['Shakha ID']} value={s['Shakha ID']}>{s['Shakha Name']}</option>
+              ))}
+            </select>
+          </>
+        }
+      />
+
+      {participationStats && participationStats.byShakha.length > 0 && (
+        <div>
+          <h2 className="text-lg font-display font-semibold text-ink mb-3">
+            Participation by Shakha ({participationYear})
+          </h2>
+          <div className="overflow-x-auto rounded-card border border-ink/10">
+            <table className="w-full text-sm">
+              <thead className="bg-paper-raised text-ink-muted text-xs uppercase tracking-wide">
+                <tr>
+                  <th className="text-left px-4 py-2">Shakha</th>
+                  <th className="text-right px-4 py-2">Sessions Reported</th>
+                  <th className="text-right px-4 py-2">Total Attendance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {participationStats.byShakha.map((row) => (
+                  <tr key={row.shakhaId} className="border-t border-ink/10">
+                    <td className="px-4 py-2 text-ink">{row.shakhaName}</td>
+                    <td className="px-4 py-2 text-right text-ink-light">{row.reports}</td>
+                    <td className="px-4 py-2 text-right text-ink font-medium">{row.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
+      )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {cards.map((c) => (
-            <div key={c.label} className="bg-paper-raised rounded-card border border-ink/10 p-4">
-              <p className="text-2xl font-display font-semibold text-ink">{c.value}</p>
-              <p className="text-xs text-ink-muted mt-1">{c.label}</p>
-            </div>
-          ))}
-        </div>
+      <div>
+        <h2 className="text-lg font-display font-semibold text-ink mb-3">
+          Search Participants
+        </h2>
+        <form onSubmit={handleSearch} className="flex gap-2 mb-4">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Name or Participant ID…"
+            className="input"
+          />
+          <button type="submit" className="btn-primary whitespace-nowrap">
+            Search
+          </button>
+        </form>
 
-        {bundle.nextSchedule && (
-          <div className="bg-ink text-paper rounded-card p-5 sm:p-6">
-            <p className="text-xs font-mono uppercase tracking-wide text-marigold mb-2">
-              Next Shakha — {formatDisplayDate(bundle.nextSchedule.Date)}
-            </p>
-            <div className="flex gap-6 text-sm">
-              <span>Going: <strong>{bundle.nextShakhaAttendance.going}</strong></span>
-              <span>Maybe: <strong>{bundle.nextShakhaAttendance.maybe}</strong></span>
-              <span>Not attending: <strong>{bundle.nextShakhaAttendance.notGoing}</strong></span>
-            </div>
+        {results.length > 0 && (
+          <div className="overflow-x-auto rounded-card border border-ink/10">
+            <table className="w-full text-sm">
+              <thead className="bg-paper-raised text-ink-muted text-xs uppercase tracking-wide">
+                <tr>
+                  <th className="text-left px-4 py-2">Name</th>
+                  <th className="text-left px-4 py-2">Shakha</th>
+                  <th className="text-left px-4 py-2">Type</th>
+                  <th className="text-left px-4 py-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((p) => (
+                  <tr key={p['Participant ID']} className="border-t border-ink/10">
+                    <td className="px-4 py-2 text-ink">{p['Participant Name']}</td>
+                    <td className="px-4 py-2 text-ink-light">{p['Shakha Name']}</td>
+                    <td className="px-4 py-2 text-ink-light">{p['Participant Type']}</td>
+                    <td className="px-4 py-2 text-ink-light">{p['Active Status']}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-
-        <div>
-          <h2 className="text-lg font-display font-semibold text-ink mb-3">Participants</h2>
-          <form onSubmit={handleSearch} className="flex gap-2 mb-4">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name…"
-              className="input"
-            />
-            <button type="submit" className="btn-primary whitespace-nowrap">Search</button>
-          </form>
-
-          {participants.length > 0 && (
-            <div className="overflow-x-auto rounded-card border border-ink/10">
-              <table className="w-full text-sm">
-                <thead className="bg-paper-raised text-ink-muted text-xs uppercase tracking-wide">
-                  <tr>
-                    <th className="text-left px-4 py-2">Name</th>
-                    <th className="text-left px-4 py-2">Age</th>
-                    <th className="text-left px-4 py-2">Type</th>
-                    <th className="text-left px-4 py-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {participants.map((p) => (
-                    <tr key={p['Participant ID']} className="border-t border-ink/10">
-                      <td className="px-4 py-2 text-ink">{p['Participant Name']}</td>
-                      <td className="px-4 py-2 text-ink-light">{p.Age || '—'}</td>
-                      <td className="px-4 py-2 text-ink-light">{p['Participant Type']}</td>
-                      <td className="px-4 py-2 text-ink-light">{p['Active Status']}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        <ParticipationStats
-          title="Participation This Year"
-          year={participationYear}
-          onYearChange={setParticipationYear}
-          weekly={participationStats?.weekly ?? []}
-          cumulativeTotal={participationStats?.cumulativeTotal ?? 0}
-          composition={
-            participationStats?.composition ?? {
-              Shishu: 0,
-              Bal: 0,
-              Kishore: 0,
-              Tarun: 0,
-              Praudh: 0,
-              Jestha: 0,
-            }
-          }
-          loading={participationLoading}
-        />
       </div>
-    </Layout>
+    </div>
   );
 }
