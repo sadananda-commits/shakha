@@ -14,7 +14,7 @@ export interface User {
   'Emergency Contact'?: string;
   'GDPR Consent'?: string;
   'Consent Date'?: string;
-  Role?: 'Participant' | 'Shakha Coordinator';
+  Role?: 'Participant' | 'Shakha Coordinator' | 'Admin';
 }
 
 export interface Participant {
@@ -131,6 +131,11 @@ export interface DashboardBundle {
   participants: Participant[];
   attendance: AttendanceRecord[];
   isCoordinator: boolean;
+  // True when user.Role === 'Admin'. An Admin is a super-user: they are not
+  // tied to one Shakha, so the Coordinator Dashboard shows a Shakha picker
+  // instead of loading `shakha` directly. Backend (getMyDashboard) should
+  // set this — see note in pages/coordinator/index.tsx if it isn't yet.
+  isAdmin?: boolean;
 }
 
 export interface CoordinatorSummary {
@@ -321,4 +326,33 @@ export interface ShakhaParticipationTotal {
 
 export interface CountryParticipationStatsBundle extends ParticipationStatsBundle {
   byShakha: ShakhaParticipationTotal[];
+}
+
+// --- Admin Dashboard: Overview cards (one per Shakha) ---
+
+export interface ShakhaOverviewCard {
+  shakhaId: string;
+  shakhaName: string;
+  area: string;
+  dayOfWeek: string;
+  nextDate: string | null;
+  nextStatus: string | null;
+}
+
+// --- Coordinator: "Record Shakha Numbers" — schedule dates joined with
+// whatever participation report already exists for that date, so the
+// coordinator can see and fill in both reported and un-reported dates. ---
+
+export interface ScheduleParticipationRow {
+  scheduleId: string;
+  date: string;
+  status: string;
+  reported: boolean;
+  Shishu: number;
+  Bal: number;
+  Kishore: number;
+  Tarun: number;
+  Praudh: number;
+  Jestha: number;
+  Total: number;
 }
