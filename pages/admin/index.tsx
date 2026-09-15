@@ -250,10 +250,12 @@ function AdminDashboard({ adminEmail, onLogout }: { adminEmail: string; onLogout
         cumulativeTotal={participationStats?.cumulativeTotal ?? 0}
         composition={
           participationStats?.composition ?? {
-            'Children Male': 0, 'Children Female': 0,
-            'Youth Male': 0, 'Youth Female': 0,
-            'Adult Male': 0, 'Adult Female': 0,
-            'Senior Male': 0, 'Senior Female': 0,
+            Shishu: 0,
+            Bal: 0,
+            Kishore: 0,
+            Tarun: 0,
+            Praudh: 0,
+            Jestha: 0,
           }
         }
         loading={participationLoading}

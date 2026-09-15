@@ -11,8 +11,11 @@ import {
 } from 'recharts';
 import { ParticipationComposition, WeeklyParticipation } from '@/lib/types';
 import { formatDisplayDate } from '@/lib/format';
-
-const CATEGORIES = ['Swayamsevaka', 'Bal', 'Swayamsevak', 'Jestha'] as const;
+import {
+  PARTICIPATION_CATEGORIES,
+  PARTICIPATION_CATEGORY_LABELS,
+  PARTICIPATION_CATEGORY_AGE_RANGES,
+} from '@/lib/participation';
 
 export default function ParticipationStats({
   title,
@@ -116,10 +119,13 @@ export default function ParticipationStats({
                   </tr>
                 </thead>
                 <tbody>
-                  {CATEGORIES.map((cat) => (
+                  {PARTICIPATION_CATEGORIES.map((cat) => (
                     <tr key={cat} className="border-t border-ink/10">
-                      <td className="px-4 py-2 text-ink">{cat}</td>
-                      <td className="px-4 py-2 text-right text-ink font-medium">
+                      <td className="px-4 py-2 text-ink">
+                        <div className="font-medium">{PARTICIPATION_CATEGORY_LABELS[cat]}</div>
+                        <div className="text-xs text-ink-muted">{PARTICIPATION_CATEGORY_AGE_RANGES[cat]}</div>
+                      </td>
+                      <td className="px-4 py-2 text-right text-ink font-medium align-top">
                         {composition[cat] || 0}
                       </td>
                     </tr>

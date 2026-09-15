@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react';
 import { callHssApi, HssApiError } from '@/lib/hssApi';
 import { ParticipationReport } from '@/lib/types';
+import {
+  PARTICIPATION_CATEGORIES,
+  PARTICIPATION_CATEGORY_LABELS,
+  PARTICIPATION_CATEGORY_AGE_RANGES,
+  ParticipationCategory,
+} from '@/lib/participation';
 
-const CATEGORIES = ['Swayamsevaka', 'Bal', 'Swayamsevak', 'Jestha'] as const;
-
-type Counts = Record<(typeof CATEGORIES)[number], string>;
+type Counts = Record<ParticipationCategory, string>;
 
 function emptyCounts(): Counts {
-  return { Swayamsevaka: '', Bal: '', Swayamsevak: '', Jestha: '' };
+  return PARTICIPATION_CATEGORIES.reduce((acc, cat) => {
+    acc[cat] = '';
+    return acc;
+  }, {} as Counts);
 }
 
 export default function ParticipationReportForm({
@@ -34,12 +41,12 @@ export default function ParticipationReportForm({
       .then((report) => {
         setExisting(report);
         if (report) {
-          setCounts({
-            Swayamsevaka: String(report['Swayamsevaka'] ?? ''),
-            Bal: String(report['Bal'] ?? ''),
-            Swayamsevak: String(report['Swayamsevak'] ?? ''),
-            Jestha: String(report['Jestha'] ?? ''),
-          });
+          setCounts(
+            PARTICIPATION_CATEGORIES.reduce((acc, cat) => {
+              acc[cat] = String(report[cat] ?? '');
+              return acc;
+            }, {} as Counts)
+          );
         }
       })
       .finally(() => setLoading(false));
@@ -54,15 +61,11 @@ export default function ParticipationReportForm({
     setSaved(false);
     setError('');
     try {
-      await callHssApi('submitParticipationReport', {
-        userId,
-        shakhaId,
-        scheduleId,
-        Swayamsevaka: Number(counts.Swayamsevaka) || 0,
-        Bal: Number(counts.Bal) || 0,
-        Swayamsevak: Number(counts.Swayamsevak) || 0,
-        Jestha: Number(counts.Jestha) || 0,
+      const payload: Record<string, unknown> = { userId, shakhaId, scheduleId };
+      PARTICIPATION_CATEGORIES.forEach((cat) => {
+        payload[cat] = Number(counts[cat]) || 0;
       });
+      await callHssApi('submitParticipationReport', payload);
       setSaved(true);
     } catch (err) {
       setError(err instanceof HssApiError ? err.message : 'Something went wrong.');
@@ -98,12 +101,15 @@ export default function ParticipationReportForm({
         <p className="text-ink-muted text-sm">Loading…</p>
       ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <table className="w-full text-sm max-w-xs">
+          <table className="w-full text-sm max-w-sm">
             <tbody>
-              {CATEGORIES.map((cat) => (
+              {PARTICIPATION_CATEGORIES.map((cat) => (
                 <tr key={cat} className="border-t border-ink/10 first:border-t-0">
-                  <td className="py-2 pr-3 text-ink font-medium">{cat}</td>
-                  <td className="py-2">
+                  <td className="py-2 pr-3">
+                    <div className="text-ink font-medium">{PARTICIPATION_CATEGORY_LABELS[cat]}</div>
+                    <div className="text-xs text-ink-muted">{PARTICIPATION_CATEGORY_AGE_RANGES[cat]}</div>
+                  </td>
+                  <td className="py-2 align-top">
                     <input
                       type="number"
                       min={0}

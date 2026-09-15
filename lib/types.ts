@@ -276,9 +276,11 @@ export interface ParticipationReport {
   'Shakha ID': string;
   'Shakha Name': string;
   'Date': string;
-  'Swayamsevaka': number;
+  'Shishu': number;
   'Bal': number;
-  'Swayamsevak': number;
+  'Kishore': number;
+  'Tarun': number;
+  'Praudh': number;
   'Jestha': number;
   'Total': number;
   'Submitted By User ID': string;
@@ -295,9 +297,11 @@ export interface WeeklyParticipation {
 }
 
 export interface ParticipationComposition {
-  'Swayamsevaka': number;
+  'Shishu': number;
   'Bal': number;
-  'Swayamsevak': number;
+  'Kishore': number;
+  'Tarun': number;
+  'Praudh': number;
   'Jestha': number;
 }
 
