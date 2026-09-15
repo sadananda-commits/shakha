@@ -9,7 +9,6 @@ import { DashboardBundle, Shakha, ScheduleParticipationRow } from '@/lib/types';
 import {
   PARTICIPATION_CATEGORIES,
   PARTICIPATION_CATEGORY_LABELS,
-  PARTICIPATION_CATEGORY_AGE_RANGES,
   ParticipationCategory,
 } from '@/lib/participation';
 
@@ -264,46 +263,45 @@ export default function RecordShakhaNumbersPage() {
 
                 {!rowsLoading && visibleRows.length > 0 && (
                   <div className="overflow-x-auto rounded-card border border-ink/10">
-                    <table className="text-sm border-collapse">
-                      <thead>
+                    <table className="w-full text-sm">
+                      <thead className="bg-paper-raised text-ink-muted text-xs uppercase tracking-wide">
                         <tr>
-                          <th className="sticky left-0 z-10 bg-paper-raised text-ink-muted text-xs uppercase tracking-wide text-left px-4 py-2 align-bottom min-w-[11rem]">
-                            Participant Type
-                          </th>
-                          {visibleRows.map((row) => (
-                            <th
-                              key={row.scheduleId}
-                              className="bg-paper-raised px-1 py-2 align-bottom border-l border-ink/10"
-                            >
-                              <div className="flex flex-col items-center gap-1">
-                                <span
-                                  className={`h-1.5 w-1.5 rounded-full ${
-                                    row.reported ? 'bg-sage' : 'bg-marigold'
-                                  }`}
-                                  title={row.reported ? 'Reported' : 'Not reported'}
-                                />
-                                <div
-                                  className="text-xs font-medium text-ink whitespace-nowrap py-1"
-                                  style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-                                >
-                                  {formatDisplayDate(row.date)}
-                                </div>
-                              </div>
+                          <th className="text-left px-4 py-2">Date</th>
+                          <th className="text-left px-4 py-2">Status</th>
+                          {PARTICIPATION_CATEGORIES.map((cat) => (
+                            <th key={cat} className="text-right px-3 py-2 whitespace-nowrap">
+                              {PARTICIPATION_CATEGORY_LABELS[cat]}
                             </th>
                           ))}
+                          <th className="text-right px-4 py-2">Total</th>
+                          <th className="px-4 py-2"></th>
                         </tr>
                       </thead>
                       <tbody>
-                        {PARTICIPATION_CATEGORIES.map((cat) => (
-                          <tr key={cat} className="border-t border-ink/10">
-                            <td className="sticky left-0 z-10 bg-paper px-4 py-2 whitespace-nowrap">
-                              <div className="text-ink font-medium">{PARTICIPATION_CATEGORY_LABELS[cat]}</div>
-                              <div className="text-xs text-ink-muted">{PARTICIPATION_CATEGORY_AGE_RANGES[cat]}</div>
-                            </td>
-                            {visibleRows.map((row) => {
-                              const draft = drafts[row.scheduleId] ?? draftFromRow(row);
-                              return (
-                                <td key={row.scheduleId} className="px-1 py-2 border-l border-ink/10">
+                        {visibleRows.map((row) => {
+                          const draft = drafts[row.scheduleId] ?? draftFromRow(row);
+                          const total = PARTICIPATION_CATEGORIES.reduce(
+                            (sum, cat) => sum + (Number(draft[cat]) || 0),
+                            0
+                          );
+                          return (
+                            <tr key={row.scheduleId} className="border-t border-ink/10">
+                              <td className="px-4 py-2 text-ink whitespace-nowrap">
+                                {formatDisplayDate(row.date)}
+                              </td>
+                              <td className="px-4 py-2">
+                                <span
+                                  className={`text-xs px-2 py-0.5 rounded-full ${
+                                    row.reported
+                                      ? 'bg-sage/15 text-sage'
+                                      : 'bg-marigold/15 text-marigold-dark'
+                                  }`}
+                                >
+                                  {row.reported ? 'Reported' : 'Not reported'}
+                                </span>
+                              </td>
+                              {PARTICIPATION_CATEGORIES.map((cat) => (
+                                <td key={cat} className="px-2 py-2">
                                   <input
                                     type="number"
                                     min={0}
@@ -314,52 +312,26 @@ export default function RecordShakhaNumbersPage() {
                                         [row.scheduleId]: { ...draft, [cat]: e.target.value },
                                       })
                                     }
-                                    className="input w-14 px-1 text-center"
+                                    className="input w-16 text-right"
                                   />
                                 </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-
-                        <tr className="border-t border-ink/10">
-                          <td className="sticky left-0 z-10 bg-paper-raised px-4 py-2 text-ink font-semibold whitespace-nowrap">
-                            Total
-                          </td>
-                          {visibleRows.map((row) => {
-                            const draft = drafts[row.scheduleId] ?? draftFromRow(row);
-                            const total = PARTICIPATION_CATEGORIES.reduce(
-                              (sum, cat) => sum + (Number(draft[cat]) || 0),
-                              0
-                            );
-                            return (
-                              <td
-                                key={row.scheduleId}
-                                className="px-1 py-2 border-l border-ink/10 text-center font-semibold text-ink bg-paper-raised"
-                              >
-                                {total}
+                              ))}
+                              <td className="px-4 py-2 text-right font-medium text-ink">{total}</td>
+                              <td className="px-4 py-2 text-right whitespace-nowrap">
+                                <button
+                                  onClick={() => handleSave(row)}
+                                  disabled={savingId === row.scheduleId}
+                                  className="btn-primary py-1 px-3 text-xs"
+                                >
+                                  {savingId === row.scheduleId ? 'Saving…' : 'Save'}
+                                </button>
+                                {savedId === row.scheduleId && savingId !== row.scheduleId && (
+                                  <span className="block text-xs text-sage mt-1">Saved.</span>
+                                )}
                               </td>
-                            );
-                          })}
-                        </tr>
-
-                        <tr className="border-t border-ink/10">
-                          <td className="sticky left-0 z-10 bg-paper px-4 py-2"></td>
-                          {visibleRows.map((row) => (
-                            <td key={row.scheduleId} className="px-1 py-2 border-l border-ink/10 text-center">
-                              <button
-                                onClick={() => handleSave(row)}
-                                disabled={savingId === row.scheduleId}
-                                className="btn-primary py-1 px-2 text-xs whitespace-nowrap"
-                              >
-                                {savingId === row.scheduleId ? '…' : 'Save'}
-                              </button>
-                              {savedId === row.scheduleId && savingId !== row.scheduleId && (
-                                <span className="block text-xs text-sage mt-1">Saved</span>
-                              )}
-                            </td>
-                          ))}
-                        </tr>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
