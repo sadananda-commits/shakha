@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 
 const LINKS = [
   { href: '/', label: 'HSS Home' },
+  { href: '/find-shakha', label: 'Find a Shakha' },
   { href: '/my-shakha', label: 'My Shakha' },
   { href: '/baudhik', label: 'Baudhik Repository' },
   { href: '/khel', label: 'Khel Repository' },
