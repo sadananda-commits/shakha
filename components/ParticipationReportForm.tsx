@@ -1,21 +1,9 @@
 import { useEffect, useState } from 'react';
 import { callHssApi, HssApiError } from '@/lib/hssApi';
 import { ParticipationReport } from '@/lib/types';
-import {
-  PARTICIPATION_CATEGORIES,
-  PARTICIPATION_CATEGORY_LABELS,
-  PARTICIPATION_CATEGORY_AGE_RANGES,
-  ParticipationCategory,
-} from '@/lib/participation';
+import { useParticipantTypes } from '@/lib/participation';
 
-type Counts = Record<ParticipationCategory, string>;
-
-function emptyCounts(): Counts {
-  return PARTICIPATION_CATEGORIES.reduce((acc, cat) => {
-    acc[cat] = '';
-    return acc;
-  }, {} as Counts);
-}
+type Counts = Record<string, string>;
 
 export default function ParticipationReportForm({
   userId,
@@ -26,13 +14,28 @@ export default function ParticipationReportForm({
   shakhaId: string;
   scheduleId: string;
 }) {
+  const { types } = useParticipantTypes();
   const [open, setOpen] = useState(false);
-  const [counts, setCounts] = useState<Counts>(emptyCounts());
+  const [counts, setCounts] = useState<Counts>({});
   const [existing, setExisting] = useState<ParticipationReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+
+  // Once the Participant Types are known, seed blank counts for any type
+  // that doesn't have one yet — covers first render and a type added to
+  // the sheet after the form was already open.
+  useEffect(() => {
+    if (types.length === 0) return;
+    setCounts((prev) => {
+      const next = { ...prev };
+      types.forEach((t) => {
+        if (next[t['Type Key']] === undefined) next[t['Type Key']] = '';
+      });
+      return next;
+    });
+  }, [types]);
 
   useEffect(() => {
     if (!open) return;
@@ -42,8 +45,8 @@ export default function ParticipationReportForm({
         setExisting(report);
         if (report) {
           setCounts(
-            PARTICIPATION_CATEGORIES.reduce((acc, cat) => {
-              acc[cat] = String(report[cat] ?? '');
+            types.reduce((acc, t) => {
+              acc[t['Type Key']] = String(report[t['Type Key']] ?? '');
               return acc;
             }, {} as Counts)
           );
@@ -62,8 +65,8 @@ export default function ParticipationReportForm({
     setError('');
     try {
       const payload: Record<string, unknown> = { userId, shakhaId, scheduleId };
-      PARTICIPATION_CATEGORIES.forEach((cat) => {
-        payload[cat] = Number(counts[cat]) || 0;
+      types.forEach((t) => {
+        payload[t['Type Key']] = Number(counts[t['Type Key']]) || 0;
       });
       await callHssApi('submitParticipationReport', payload);
       setSaved(true);
@@ -97,24 +100,24 @@ export default function ParticipationReportForm({
       </div>
       <p className="text-xs text-ink-muted -mt-1">Number of attendees by category.</p>
 
-      {loading ? (
+      {loading || types.length === 0 ? (
         <p className="text-ink-muted text-sm">Loading…</p>
       ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <table className="w-full text-sm max-w-sm">
             <tbody>
-              {PARTICIPATION_CATEGORIES.map((cat) => (
-                <tr key={cat} className="border-t border-ink/10 first:border-t-0">
+              {types.map((t) => (
+                <tr key={t['Type Key']} className="border-t border-ink/10 first:border-t-0">
                   <td className="py-2 pr-3">
-                    <div className="text-ink font-medium">{PARTICIPATION_CATEGORY_LABELS[cat]}</div>
-                    <div className="text-xs text-ink-muted">{PARTICIPATION_CATEGORY_AGE_RANGES[cat]}</div>
+                    <div className="text-ink font-medium">{t['Label']}</div>
+                    <div className="text-xs text-ink-muted">{t['Age Range Label']}</div>
                   </td>
                   <td className="py-2 align-top">
                     <input
                       type="number"
                       min={0}
-                      value={counts[cat]}
-                      onChange={(e) => setCounts({ ...counts, [cat]: e.target.value })}
+                      value={counts[t['Type Key']] ?? ''}
+                      onChange={(e) => setCounts({ ...counts, [t['Type Key']]: e.target.value })}
                       className="input w-24"
                     />
                   </td>
