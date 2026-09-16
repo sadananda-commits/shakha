@@ -5,23 +5,27 @@ import ActivitiesCard from '@/components/ActivitiesCard';
 import ProfileCard from '@/components/ProfileCard';
 import AddParticipantForm from '@/components/AddParticipantForm';
 import ScheduleActivitiesTable from '@/components/ScheduleActivitiesTable';
+import ShakhaLeadersCard from '@/components/ShakhaLeadersCard';
+import VisitRequestForm from '@/components/VisitRequestForm';
+import { setSessionUser, clearSessionUser } from '@/components/UserMenu';
 import { callHssApi, HssApiError } from '@/lib/hssApi';
+import { formatDisplayDate } from '@/lib/format';
 import {
   AttendanceResponse,
   DashboardBundle,
   Shakha,
+  ShakhaPreview,
   User,
 } from '@/lib/types';
 
 type View = 'loading' | 'login' | 'register' | 'dashboard';
-type Section = 'next' | 'activities' | 'profile' | 'participants';
+type Section = 'next' | 'activities' | 'pramukhs' | 'profile' | 'participants';
 
 const SESSION_KEY = 'hss_user_id';
 
 export default function MyShakhaPage() {
   const [view, setView] = useState<View>('loading');
   const [dashboard, setDashboard] = useState<DashboardBundle | null>(null);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     const savedUserId = typeof window !== 'undefined' ? localStorage.getItem(SESSION_KEY) : null;
@@ -37,15 +41,16 @@ export default function MyShakhaPage() {
       const data = await callHssApi<DashboardBundle>('getMyDashboard', { userId });
       setDashboard(data);
       setView('dashboard');
-      localStorage.setItem(SESSION_KEY, userId);
+      // Keeps the header's name + Sign out in sync on every page.
+      setSessionUser(userId, data.user['Full Name']);
     } catch (err) {
-      localStorage.removeItem(SESSION_KEY);
+      clearSessionUser();
       setView('login');
     }
   }
 
   function handleLogout() {
-    localStorage.removeItem(SESSION_KEY);
+    clearSessionUser();
     setDashboard(null);
     setView('login');
   }
@@ -119,22 +124,10 @@ function LoginForm({
       <p className="text-ink-muted text-sm">Sign in to view your Shakha and confirm attendance.</p>
 
       <Field label="Email">
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="input"
-        />
+        <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="input" />
       </Field>
       <Field label="Password">
-        <input
-          type="password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="input"
-        />
+        <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="input" />
       </Field>
 
       {error && <p className="text-sm text-vermilion">{error}</p>}
@@ -208,38 +201,16 @@ function RegisterForm({
       <h1 className="text-2xl font-display font-semibold text-ink">Create your account</h1>
 
       <Field label="Full name">
-        <input
-          required
-          value={form.fullName}
-          onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-          className="input"
-        />
+        <input required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className="input" />
       </Field>
       <Field label="Email">
-        <input
-          type="email"
-          required
-          value={form.email}
-          onChange={(e) => setForm({ ...form, email: e.target.value })}
-          className="input"
-        />
+        <input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="input" />
       </Field>
       <Field label="Phone">
-        <input
-          required
-          value={form.phone}
-          onChange={(e) => setForm({ ...form, phone: e.target.value })}
-          className="input"
-        />
+        <input required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="input" />
       </Field>
       <Field label="Password">
-        <input
-          type="password"
-          required
-          value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-          className="input"
-        />
+        <input type="password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="input" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Date of birth">
@@ -286,36 +257,19 @@ function RegisterForm({
         </select>
       </Field>
       <Field label="Address (optional)">
-        <input
-          value={form.address}
-          onChange={(e) => setForm({ ...form, address: e.target.value })}
-          className="input"
-        />
+        <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="input" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Country (optional)">
-          <input
-            value={form.country}
-            onChange={(e) => setForm({ ...form, country: e.target.value })}
-            className="input"
-          />
+          <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} className="input" />
         </Field>
         <Field label="Emergency contact (optional)">
-          <input
-            value={form.emergencyContact}
-            onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })}
-            className="input"
-          />
+          <input value={form.emergencyContact} onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })} className="input" />
         </Field>
       </div>
 
       <label className="flex items-start gap-3 bg-paper-raised rounded-card border border-ink/10 p-4">
-        <input
-          type="checkbox"
-          checked={gdprConsent}
-          onChange={(e) => setGdprConsent(e.target.checked)}
-          className="mt-1"
-        />
+        <input type="checkbox" checked={gdprConsent} onChange={(e) => setGdprConsent(e.target.checked)} className="mt-1" />
         <span className="text-sm text-ink-light leading-relaxed">
           I consent to HSS storing and processing my personal information for the
           purpose of Shakha administration, communication, participation tracking
@@ -343,6 +297,7 @@ function RegisterForm({
 const NAV_ITEMS: { key: Section; label: string }[] = [
   { key: 'next', label: 'Next Shakha' },
   { key: 'activities', label: 'Activities' },
+  { key: 'pramukhs', label: 'Pramukhs' },
   { key: 'profile', label: 'My Profile' },
   { key: 'participants', label: 'My Participants' },
 ];
@@ -359,6 +314,38 @@ function Dashboard({
   const { user, shakha, nextSchedule, scheduleActivities, participants, attendance } = dashboard;
   const [section, setSection] = useState<Section>('next');
   const [addingParticipant, setAddingParticipant] = useState(false);
+
+  // --- Shakha switcher -------------------------------------------------
+  // The person's own Shakha is the default. "Select Shakha" reveals a
+  // dropdown of every active Shakha; picking a different one loads that
+  // Shakha's schedule and lets them say they plan to attend it, without
+  // changing which Shakha they're actually registered with (that's a
+  // bigger action — a transfer — and stays a separate flow).
+  const homeShakhaId = shakha?.['Shakha ID'] || '';
+  const [picking, setPicking] = useState(false);
+  const [shakhas, setShakhas] = useState<Shakha[]>([]);
+  const [viewingId, setViewingId] = useState(homeShakhaId);
+  const [preview, setPreview] = useState<ShakhaPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  const viewingHome = viewingId === homeShakhaId;
+
+  useEffect(() => {
+    if (!picking || shakhas.length > 0) return;
+    callHssApi<Shakha[]>('getShakhas').then(setShakhas).catch(() => setShakhas([]));
+  }, [picking, shakhas.length]);
+
+  useEffect(() => {
+    if (viewingHome || !viewingId) {
+      setPreview(null);
+      return;
+    }
+    setPreviewLoading(true);
+    callHssApi<ShakhaPreview>('getShakhaPreview', { shakhaId: viewingId })
+      .then(setPreview)
+      .catch(() => setPreview(null))
+      .finally(() => setPreviewLoading(false));
+  }, [viewingId, viewingHome]);
 
   const initialResponses: Record<string, AttendanceResponse> = {};
   attendance.forEach((a) => {
@@ -378,105 +365,222 @@ function Dashboard({
     onRefresh();
   }
 
+  const displayedShakha = viewingHome ? shakha : preview?.shakha ?? null;
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
           <p className="text-xs font-mono uppercase tracking-wide text-marigold-dark">
-            My Shakha
+            {viewingHome ? 'My Shakha' : 'Viewing Shakha'}
           </p>
-          <h1 className="text-2xl font-display font-semibold text-ink">
-            {shakha?.['Shakha Name'] || 'Your Shakha'}
-          </h1>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-display font-semibold text-ink">
+              {displayedShakha?.['Shakha Name'] || 'Your Shakha'}
+            </h1>
+            {!picking && (
+              <button
+                onClick={() => setPicking(true)}
+                className="text-sm text-marigold-dark underline underline-offset-2 whitespace-nowrap"
+              >
+                Select Shakha
+              </button>
+            )}
+          </div>
+
+          {picking && (
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <select
+                value={viewingId}
+                onChange={(e) => setViewingId(e.target.value)}
+                className="input w-auto"
+              >
+                {shakhas.length === 0 && <option value={homeShakhaId}>Loading…</option>}
+                {shakhas.map((s) => (
+                  <option key={s['Shakha ID']} value={s['Shakha ID']}>
+                    {s['Shakha Name']} — {s.Area}
+                    {s['Shakha ID'] === homeShakhaId ? ' (mine)' : ''}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => {
+                  setPicking(false);
+                  setViewingId(homeShakhaId);
+                }}
+                className="text-sm text-ink-light underline underline-offset-2"
+              >
+                {viewingHome ? 'Close' : 'Back to my Shakha'}
+              </button>
+            </div>
+          )}
         </div>
+
         <button onClick={onLogout} className="text-sm text-ink-light underline underline-offset-2">
           Sign out
         </button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-6">
-        <nav className="sm:w-52 flex-shrink-0">
-          <div className="flex sm:flex-col gap-1 overflow-x-auto sm:overflow-visible pb-1 sm:pb-0">
-            {NAV_ITEMS.map((item) => (
-              <button
-                key={item.key}
-                onClick={() => setSection(item.key)}
-                className={`text-left px-4 py-2.5 rounded-card whitespace-nowrap text-sm font-medium transition-colors ${
-                  section === item.key
-                    ? 'bg-ink text-paper'
-                    : 'text-ink-light hover:bg-paper-raised'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </nav>
+      {/* Viewing someone else's Shakha: schedule + pramukhs + attend option. */}
+      {!viewingHome && (
+        <>
+          {previewLoading && <p className="text-ink-muted text-sm">Loading…</p>}
 
-        <div className="flex-1 min-w-0 flex flex-col gap-6">
-          {section === 'next' && (
-            <>
-              <NextShakhaCard
-                shakha={shakha}
-                schedule={nextSchedule}
-                participants={participants}
-                initialResponses={initialResponses}
-                onSubmitAttendance={handleAttendanceSubmit}
-              />
-
-              {nextSchedule && scheduleActivities.length > 0 && (
-                <div>
-                  <h3 className="font-display text-lg font-semibold text-ink mb-3">Schedule</h3>
-                  <ScheduleActivitiesTable activities={scheduleActivities} />
-                </div>
-              )}
-            </>
-          )}
-
-          {section === 'activities' && (
-            <ActivitiesCard userId={user['User ID']} participants={participants} />
-          )}
-
-          {section === 'profile' && <ProfileCard user={user} onUpdated={onRefresh} />}
-
-          {section === 'participants' && (
-            <>
+          {!previewLoading && preview && (
+            <div className="flex flex-col gap-6">
               <div className="bg-paper-raised rounded-card border border-ink/10 p-5 sm:p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-display text-lg font-semibold text-ink">My Participants</h3>
-                  {!addingParticipant && (
-                    <button
-                      onClick={() => setAddingParticipant(true)}
-                      className="text-sm text-marigold-dark underline underline-offset-2"
-                    >
-                      + Add Participant
-                    </button>
-                  )}
-                </div>
-                <ul className="flex flex-col gap-2">
-                  {participants.map((p) => (
-                    <li key={p['Participant ID']} className="flex justify-between text-sm">
-                      <span className="text-ink">{p['Participant Name']}</span>
-                      <span className="text-ink-muted">{p.Relationship}</span>
-                    </li>
-                  ))}
-                </ul>
+                <p className="text-sm text-ink-muted">
+                  {[preview.shakha.Area, preview.shakha.City].filter(Boolean).join(' · ')}
+                </p>
+                <p className="text-sm text-ink mt-2">
+                  Meets {preview.shakha['Day of Week']}s, {preview.shakha['Start Time']}–
+                  {preview.shakha['End Time']}
+                </p>
+                <p className="text-sm text-ink-muted mt-1">
+                  {preview.shakha.Venue || preview.shakha.Address}
+                </p>
+                {preview.shakha['Map Link'] && (
+                  <a
+                    href={preview.shakha['Map Link']}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mt-3 text-sm text-marigold-dark underline underline-offset-2"
+                  >
+                    Open in Maps
+                  </a>
+                )}
               </div>
 
-              {addingParticipant && (
-                <AddParticipantForm
-                  userId={user['User ID']}
-                  onAdded={() => {
-                    setAddingParticipant(false);
-                    onRefresh();
-                  }}
-                  onCancel={() => setAddingParticipant(false)}
-                />
+              {preview.nextSchedule ? (
+                <div className="bg-ink text-paper rounded-card p-5 sm:p-6">
+                  <p className="text-xs font-mono uppercase tracking-wide text-marigold mb-1">
+                    Next Session
+                  </p>
+                  <p className="text-lg font-display font-semibold">
+                    {formatDisplayDate(preview.nextSchedule.Date)} ·{' '}
+                    {preview.nextSchedule['Start Time']}–{preview.nextSchedule['End Time']}
+                  </p>
+                  <p className="text-sm opacity-80 mt-1">{preview.nextSchedule.Location}</p>
+                </div>
+              ) : (
+                <p className="text-ink-muted text-sm">
+                  No upcoming session is published for this Shakha yet.
+                </p>
               )}
-            </>
+
+              {preview.scheduleActivities.length > 0 && (
+                <div>
+                  <h3 className="font-display text-lg font-semibold text-ink mb-3">Schedule</h3>
+                  <ScheduleActivitiesTable activities={preview.scheduleActivities} />
+                </div>
+              )}
+
+              <ShakhaLeadersCard shakhaId={viewingId} />
+
+              <VisitRequestForm
+                shakhaId={viewingId}
+                shakhaName={preview.shakha['Shakha Name']}
+                sessionDate={preview.nextSchedule ? preview.nextSchedule.Date : ''}
+                defaultName={user['Full Name']}
+                defaultEmail={user.Email}
+                defaultPhone={user.Phone}
+              />
+            </div>
           )}
+        </>
+      )}
+
+      {/* Own Shakha: the full dashboard. */}
+      {viewingHome && (
+        <div className="flex flex-col sm:flex-row gap-6">
+          <nav className="sm:w-52 flex-shrink-0">
+            <div className="flex sm:flex-col gap-1 overflow-x-auto sm:overflow-visible pb-1 sm:pb-0">
+              {NAV_ITEMS.map((item) => (
+                <button
+                  key={item.key}
+                  onClick={() => setSection(item.key)}
+                  className={`text-left px-4 py-2.5 rounded-card whitespace-nowrap text-sm font-medium transition-colors ${
+                    section === item.key
+                      ? 'bg-ink text-paper'
+                      : 'text-ink-light hover:bg-paper-raised'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </nav>
+
+          <div className="flex-1 min-w-0 flex flex-col gap-6">
+            {section === 'next' && (
+              <>
+                <NextShakhaCard
+                  shakha={shakha}
+                  schedule={nextSchedule}
+                  participants={participants}
+                  initialResponses={initialResponses}
+                  onSubmitAttendance={handleAttendanceSubmit}
+                />
+
+                {nextSchedule && scheduleActivities.length > 0 && (
+                  <div>
+                    <h3 className="font-display text-lg font-semibold text-ink mb-3">Schedule</h3>
+                    <ScheduleActivitiesTable activities={scheduleActivities} />
+                  </div>
+                )}
+              </>
+            )}
+
+            {section === 'activities' && (
+              <ActivitiesCard userId={user['User ID']} participants={participants} />
+            )}
+
+            {section === 'pramukhs' && (
+              <ShakhaLeadersCard shakhaId={homeShakhaId} shakhaName={shakha?.['Shakha Name']} />
+            )}
+
+            {section === 'profile' && <ProfileCard user={user} onUpdated={onRefresh} />}
+
+            {section === 'participants' && (
+              <>
+                <div className="bg-paper-raised rounded-card border border-ink/10 p-5 sm:p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-display text-lg font-semibold text-ink">My Participants</h3>
+                    {!addingParticipant && (
+                      <button
+                        onClick={() => setAddingParticipant(true)}
+                        className="text-sm text-marigold-dark underline underline-offset-2"
+                      >
+                        + Add Participant
+                      </button>
+                    )}
+                  </div>
+                  <ul className="flex flex-col gap-2">
+                    {participants.map((p) => (
+                      <li key={p['Participant ID']} className="flex justify-between text-sm">
+                        <span className="text-ink">{p['Participant Name']}</span>
+                        <span className="text-ink-muted">{p.Relationship}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {addingParticipant && (
+                  <AddParticipantForm
+                    userId={user['User ID']}
+                    onAdded={() => {
+                      setAddingParticipant(false);
+                      onRefresh();
+                    }}
+                    onCancel={() => setAddingParticipant(false)}
+                  />
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

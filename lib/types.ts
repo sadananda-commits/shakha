@@ -393,3 +393,11 @@ export interface VisitRequestResult {
   shakhaName: string;
   sessionDate: string;
 }
+
+export interface ShakhaLeader {
+  leaderId: string;
+  shakhaId: string;
+  role: string;
+  name: string;
+  contact: string;
+}
