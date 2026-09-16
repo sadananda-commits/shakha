@@ -11,11 +11,7 @@ import {
 } from 'recharts';
 import { ParticipationComposition, WeeklyParticipation } from '@/lib/types';
 import { formatDisplayDate } from '@/lib/format';
-import {
-  PARTICIPATION_CATEGORIES,
-  PARTICIPATION_CATEGORY_LABELS,
-  PARTICIPATION_CATEGORY_AGE_RANGES,
-} from '@/lib/participation';
+import { useParticipantTypes } from '@/lib/participation';
 
 export default function ParticipationStats({
   title,
@@ -37,6 +33,7 @@ export default function ParticipationStats({
   filters?: React.ReactNode;
 }) {
   const [years, setYears] = useState<string[]>([]);
+  const { types } = useParticipantTypes();
 
   useEffect(() => {
     const current = new Date().getFullYear();
@@ -119,14 +116,14 @@ export default function ParticipationStats({
                   </tr>
                 </thead>
                 <tbody>
-                  {PARTICIPATION_CATEGORIES.map((cat) => (
-                    <tr key={cat} className="border-t border-ink/10">
+                  {types.map((t) => (
+                    <tr key={t['Type Key']} className="border-t border-ink/10">
                       <td className="px-4 py-2 text-ink">
-                        <div className="font-medium">{PARTICIPATION_CATEGORY_LABELS[cat]}</div>
-                        <div className="text-xs text-ink-muted">{PARTICIPATION_CATEGORY_AGE_RANGES[cat]}</div>
+                        <div className="font-medium">{t['Label']}</div>
+                        <div className="text-xs text-ink-muted">{t['Age Range Label']}</div>
                       </td>
                       <td className="px-4 py-2 text-right text-ink font-medium align-top">
-                        {composition[cat] || 0}
+                        {composition[t['Type Key']] || 0}
                       </td>
                     </tr>
                   ))}
