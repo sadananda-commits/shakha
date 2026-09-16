@@ -5,27 +5,23 @@ import Layout from '@/components/Layout';
 import DashboardSidebar, { SidebarItem } from '@/components/DashboardSidebar';
 import { callHssApi } from '@/lib/hssApi';
 import { formatDisplayDate } from '@/lib/format';
-import { DashboardBundle, Shakha, ScheduleParticipationRow } from '@/lib/types';
-import {
-  PARTICIPATION_CATEGORIES,
-  PARTICIPATION_CATEGORY_LABELS,
-  PARTICIPATION_CATEGORY_AGE_RANGES,
-  ParticipationCategory,
-} from '@/lib/participation';
+import { DashboardBundle, Shakha, ScheduleParticipationRow, ParticipantType } from '@/lib/types';
+import { useParticipantTypes } from '@/lib/participation';
 
 const SESSION_KEY = 'hss_user_id';
 
-type Draft = Record<ParticipationCategory, string>;
+type Draft = Record<string, string>;
 
-function draftFromRow(row: ScheduleParticipationRow): Draft {
-  return PARTICIPATION_CATEGORIES.reduce((acc, cat) => {
-    acc[cat] = String(row[cat] ?? 0);
+function draftFromRow(row: ScheduleParticipationRow, types: ParticipantType[]): Draft {
+  return types.reduce((acc, t) => {
+    acc[t['Type Key']] = String(row[t['Type Key']] ?? 0);
     return acc;
   }, {} as Draft);
 }
 
 export default function RecordShakhaNumbersPage() {
   const router = useRouter();
+  const { types } = useParticipantTypes();
   const [status, setStatus] = useState<'loading' | 'denied' | 'pickShakha' | 'ready'>('loading');
   const [userId, setUserId] = useState('');
   const [dash, setDash] = useState<DashboardBundle | null>(null);
@@ -89,9 +85,11 @@ export default function RecordShakhaNumbersPage() {
     })
       .then((data) => {
         setRows(data);
-        const nextDrafts: Record<string, Draft> = {};
-        data.forEach((row) => { nextDrafts[row.scheduleId] = draftFromRow(row); });
-        setDrafts(nextDrafts);
+        if (types.length > 0) {
+          const nextDrafts: Record<string, Draft> = {};
+          data.forEach((row) => { nextDrafts[row.scheduleId] = draftFromRow(row, types); });
+          setDrafts(nextDrafts);
+        }
         setStatus('ready');
       })
       .catch(() => setRows([]))
@@ -103,6 +101,20 @@ export default function RecordShakhaNumbersPage() {
     loadRows();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, selectedShakhaId, year]);
+
+  // Rebuild drafts once types finish loading (they arrive async, and may
+  // resolve after the schedule rows already have).
+  useEffect(() => {
+    if (types.length === 0 || rows.length === 0) return;
+    setDrafts((prev) => {
+      const next = { ...prev };
+      rows.forEach((row) => {
+        if (!next[row.scheduleId]) next[row.scheduleId] = draftFromRow(row, types);
+      });
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [types, rows]);
 
   const visibleRows = useMemo(() => {
     return rows.filter((r) => {
@@ -123,8 +135,8 @@ export default function RecordShakhaNumbersPage() {
         shakhaId: selectedShakhaId,
         scheduleId: row.scheduleId,
       };
-      PARTICIPATION_CATEGORIES.forEach((cat) => {
-        payload[cat] = Number(draft[cat]) || 0;
+      types.forEach((t) => {
+        payload[t['Type Key']] = Number(draft[t['Type Key']]) || 0;
       });
       await callHssApi('submitParticipationReport', payload);
       setSavedId(row.scheduleId);
@@ -256,13 +268,13 @@ export default function RecordShakhaNumbersPage() {
                   </label>
                 </div>
 
-                {rowsLoading && <p className="text-ink-muted text-sm">Loading…</p>}
+                {(rowsLoading || types.length === 0) && <p className="text-ink-muted text-sm">Loading…</p>}
 
-                {!rowsLoading && visibleRows.length === 0 && (
+                {!rowsLoading && types.length > 0 && visibleRows.length === 0 && (
                   <p className="text-ink-muted text-sm">No Shakha dates match this filter.</p>
                 )}
 
-                {!rowsLoading && visibleRows.length > 0 && (
+                {!rowsLoading && types.length > 0 && visibleRows.length > 0 && (
                   <div className="overflow-x-auto rounded-card border border-ink/10">
                     <table className="text-sm border-collapse">
                       <thead>
@@ -294,24 +306,24 @@ export default function RecordShakhaNumbersPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {PARTICIPATION_CATEGORIES.map((cat) => (
-                          <tr key={cat} className="border-t border-ink/10">
+                        {types.map((t) => (
+                          <tr key={t['Type Key']} className="border-t border-ink/10">
                             <td className="sticky left-0 z-10 bg-paper px-4 py-2 whitespace-nowrap">
-                              <div className="text-ink font-medium">{PARTICIPATION_CATEGORY_LABELS[cat]}</div>
-                              <div className="text-xs text-ink-muted">{PARTICIPATION_CATEGORY_AGE_RANGES[cat]}</div>
+                              <div className="text-ink font-medium">{t['Label']}</div>
+                              <div className="text-xs text-ink-muted">{t['Age Range Label']}</div>
                             </td>
                             {visibleRows.map((row) => {
-                              const draft = drafts[row.scheduleId] ?? draftFromRow(row);
+                              const draft = drafts[row.scheduleId] ?? draftFromRow(row, types);
                               return (
                                 <td key={row.scheduleId} className="px-1 py-2 border-l border-ink/10">
                                   <input
                                     type="number"
                                     min={0}
-                                    value={draft[cat]}
+                                    value={draft[t['Type Key']] ?? ''}
                                     onChange={(e) =>
                                       setDrafts({
                                         ...drafts,
-                                        [row.scheduleId]: { ...draft, [cat]: e.target.value },
+                                        [row.scheduleId]: { ...draft, [t['Type Key']]: e.target.value },
                                       })
                                     }
                                     className="input w-14 px-1 text-center"
@@ -327,9 +339,9 @@ export default function RecordShakhaNumbersPage() {
                             Total
                           </td>
                           {visibleRows.map((row) => {
-                            const draft = drafts[row.scheduleId] ?? draftFromRow(row);
-                            const total = PARTICIPATION_CATEGORIES.reduce(
-                              (sum, cat) => sum + (Number(draft[cat]) || 0),
+                            const draft = drafts[row.scheduleId] ?? draftFromRow(row, types);
+                            const total = types.reduce(
+                              (sum, t) => sum + (Number(draft[t['Type Key']]) || 0),
                               0
                             );
                             return (

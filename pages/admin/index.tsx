@@ -390,16 +390,7 @@ function AdminDashboard({ adminEmail, onLogout }: { adminEmail: string; onLogout
                 onYearChange={setParticipationYear}
                 weekly={participationStats?.weekly ?? []}
                 cumulativeTotal={participationStats?.cumulativeTotal ?? 0}
-                composition={
-                  participationStats?.composition ?? {
-                    Shishu: 0,
-                    Bal: 0,
-                    Kishore: 0,
-                    Tarun: 0,
-                    Praudh: 0,
-                    Jestha: 0,
-                  }
-                }
+                composition={participationStats?.composition ?? {}}
                 loading={participationLoading}
                 filters={
                   <>

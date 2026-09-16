@@ -15,7 +15,7 @@ export default function AddParticipantForm({
   const [form, setForm] = useState({
     name: '',
     relationship: 'Child',
-    age: '',
+    dateOfBirth: '',
     gender: '',
     phone: '',
     email: '',
@@ -59,44 +59,50 @@ export default function AddParticipantForm({
         />
       </label>
 
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-ink">Relationship</span>
+        <select
+          value={form.relationship}
+          onChange={(e) => setForm({ ...form, relationship: e.target.value })}
+          className="input"
+        >
+          {RELATIONSHIPS.map((r) => (
+            <option key={r} value={r}>{r}</option>
+          ))}
+        </select>
+      </label>
+
       <div className="grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-ink">Relationship</span>
-          <select
-            value={form.relationship}
-            onChange={(e) => setForm({ ...form, relationship: e.target.value })}
-            className="input"
-          >
-            {RELATIONSHIPS.map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-ink">Age</span>
+          <span className="text-sm font-medium text-ink">Date of birth</span>
           <input
-            type="number"
-            min={0}
-            value={form.age}
-            onChange={(e) => setForm({ ...form, age: e.target.value })}
+            type="date"
+            required
+            value={form.dateOfBirth}
+            onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })}
             className="input"
           />
         </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-ink">Gender</span>
+          <select
+            required
+            value={form.gender}
+            onChange={(e) => setForm({ ...form, gender: e.target.value })}
+            className="input"
+          >
+            <option value="">Select…</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </label>
       </div>
-
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-ink">Gender (optional)</span>
-        <select
-          value={form.gender}
-          onChange={(e) => setForm({ ...form, gender: e.target.value })}
-          className="input"
-        >
-          <option value="">Prefer not to say</option>
-          <option value="Male">Male</option>
-          <option value="Female">Female</option>
-          <option value="Other">Other</option>
-        </select>
-      </label>
+      <p className="text-xs text-ink-muted -mt-2">
+        Date of birth and gender are required — they're how the system works out
+        Shakha participation composition automatically, instead of a coordinator
+        having to estimate and count it by hand.
+      </p>
 
       <p className="text-xs text-ink-muted -mb-2">
         Phone and email are optional — mainly relevant for adult family members.

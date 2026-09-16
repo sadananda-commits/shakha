@@ -1,21 +1,66 @@
-export const PARTICIPATION_CATEGORIES = ['Shishu', 'Bal', 'Kishore', 'Tarun', 'Praudh', 'Jestha'] as const;
+import { useEffect, useState } from 'react';
+import { callHssApi } from '@/lib/hssApi';
+import { ParticipantType } from '@/lib/types';
 
-export type ParticipationCategory = (typeof PARTICIPATION_CATEGORIES)[number];
+// Participant Types (Shishu / Bal / Kishore / Tarun / Praudh / Jestha by
+// default) are defined on the "Participant Types" Google Sheet tab, not
+// hardcoded here. useParticipantTypes() fetches them once per session
+// (cached in-memory below) so the report form, the stats table, and the
+// Record Shakha Numbers grid all stay in sync automatically — editing
+// that sheet is the only thing needed to add, rename, reorder, or retire
+// a category anywhere in the app.
 
-export const PARTICIPATION_CATEGORY_LABELS: Record<ParticipationCategory, string> = {
-  Shishu: 'Shishu Swayamsevak',
-  Bal: 'Bal Swayamsevak',
-  Kishore: 'Kishore Swayamsevak',
-  Tarun: 'Tarun Swayamsevak',
-  Praudh: 'Praudh',
-  Jestha: 'Jestha (Jyeshtha)',
-};
+let cachedTypes: ParticipantType[] | null = null;
+let inFlight: Promise<ParticipantType[]> | null = null;
 
-export const PARTICIPATION_CATEGORY_AGE_RANGES: Record<ParticipationCategory, string> = {
-  Shishu: 'Up to 10 years',
-  Bal: '10 to 14 years',
-  Kishore: '14 to 18 years',
-  Tarun: '18 to 25 years',
-  Praudh: '25 to 55 years',
-  Jestha: 'Above 55 years',
-};
+function fetchParticipantTypes(): Promise<ParticipantType[]> {
+  if (cachedTypes) return Promise.resolve(cachedTypes);
+  if (!inFlight) {
+    inFlight = callHssApi<ParticipantType[]>('getParticipantTypes', {})
+      .then((types) => {
+        cachedTypes = types;
+        inFlight = null;
+        return types;
+      })
+      .catch((err) => {
+        inFlight = null;
+        throw err;
+      });
+  }
+  return inFlight;
+}
+
+/** Active Participant Types, in Display Order, with a loading flag. */
+export function useParticipantTypes() {
+  const [types, setTypes] = useState<ParticipantType[]>(cachedTypes ?? []);
+  const [loading, setLoading] = useState(!cachedTypes);
+
+  useEffect(() => {
+    if (cachedTypes) return;
+    let active = true;
+    fetchParticipantTypes()
+      .then((t) => {
+        if (active) {
+          setTypes(t);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return { types, loading };
+}
+
+/** A zero-filled composition object for the given types — handy as a loading-state default. */
+export function emptyComposition(types: ParticipantType[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  types.forEach((t) => {
+    out[t['Type Key']] = 0;
+  });
+  return out;
+}

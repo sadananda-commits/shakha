@@ -22,10 +22,10 @@ export interface Participant {
   'Primary User ID': string;
   'Participant Name': string;
   Age: number | string;
-  'Date of Birth'?: string;
+  'Date of Birth': string;
   'Participant Type': 'Primary' | 'Family' | 'Guest';
   Relationship: string;
-  Gender?: string;
+  Gender: string;
   'Shakha ID': string;
   'Shakha Name': string;
   Area: string;
@@ -275,21 +275,37 @@ export interface ActivityStatsBundle {
 
 // --- Post-Shakha Participation Reporting ---
 
+// --- Participant Types (Shishu / Bal / Kishore / Tarun / Praudh / Jestha
+// by default) live in the "Participant Types" Google Sheet, not in this
+// file. Fetch them with useParticipantTypes() from lib/participation.ts —
+// every screen renders whatever categories that returns, so a category
+// added, renamed, or reordered on the sheet shows up everywhere with no
+// code change. ParticipationReport / ParticipationComposition /
+// ScheduleParticipationRow below use an index signature for the category
+// counts (keyed by each type's 'Type Key') rather than fixed fields.
+
+export interface ParticipantType {
+  'Type Key': string;
+  'Label': string;
+  'Age Range Label': string;
+  'Min Age': number | string;
+  'Max Age': number | string;
+  'Gender': string;
+  'Display Order': number | string;
+  'Active Status': string;
+}
+
 export interface ParticipationReport {
   'Report ID': string;
   'Schedule ID': string;
   'Shakha ID': string;
   'Shakha Name': string;
   'Date': string;
-  'Shishu': number;
-  'Bal': number;
-  'Kishore': number;
-  'Tarun': number;
-  'Praudh': number;
-  'Jestha': number;
   'Total': number;
   'Submitted By User ID': string;
   'Submitted Date': string;
+  // One entry per active Participant Type key, e.g. report['Shishu'].
+  [typeKey: string]: string | number;
 }
 
 export interface WeeklyParticipation {
@@ -301,13 +317,9 @@ export interface WeeklyParticipation {
   cumulativeTotal: number;
 }
 
+// Keyed by each Participant Type's 'Type Key', e.g. composition['Shishu'].
 export interface ParticipationComposition {
-  'Shishu': number;
-  'Bal': number;
-  'Kishore': number;
-  'Tarun': number;
-  'Praudh': number;
-  'Jestha': number;
+  [typeKey: string]: number;
 }
 
 export interface ParticipationStatsBundle {
@@ -348,11 +360,7 @@ export interface ScheduleParticipationRow {
   date: string;
   status: string;
   reported: boolean;
-  Shishu: number;
-  Bal: number;
-  Kishore: number;
-  Tarun: number;
-  Praudh: number;
-  Jestha: number;
   Total: number;
+  // One entry per active Participant Type key, e.g. row['Shishu'].
+  [typeKey: string]: string | number | boolean;
 }

@@ -168,6 +168,8 @@ function RegisterForm({
     phone: '',
     password: '',
     shakhaId: '',
+    dateOfBirth: '',
+    gender: '',
     address: '',
     country: '',
     emergencyContact: '',
@@ -239,6 +241,35 @@ function RegisterForm({
           className="input"
         />
       </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Date of birth">
+          <input
+            type="date"
+            required
+            value={form.dateOfBirth}
+            onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })}
+            className="input"
+          />
+        </Field>
+        <Field label="Gender">
+          <select
+            required
+            value={form.gender}
+            onChange={(e) => setForm({ ...form, gender: e.target.value })}
+            className="input"
+          >
+            <option value="">Select…</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </Field>
+      </div>
+      <p className="text-xs text-ink-muted -mt-2">
+        Date of birth and gender are required — they're how the system works out
+        Shakha participation composition automatically, instead of a coordinator
+        having to estimate and count it by hand.
+      </p>
       <Field label="Shakha">
         <select
           required
