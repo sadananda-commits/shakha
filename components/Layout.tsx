@@ -1,13 +1,10 @@
 import AnnouncementBar from '@/components/AnnouncementBar';
-   // ...then as the first element inside the layout wrapper:
-   <AnnouncementBar />
-
-
 import Nav from './Nav';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col">
+      <AnnouncementBar />
       <Nav />
       <main className="flex-1">{children}</main>
       <footer className="border-t border-ink/10 py-8 mt-16">
