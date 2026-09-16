@@ -1,3 +1,8 @@
+import AnnouncementBar from '@/components/AnnouncementBar';
+   // ...then as the first element inside the layout wrapper:
+   <AnnouncementBar />
+
+
 import Nav from './Nav';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
