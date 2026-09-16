@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Layout from '@/components/Layout';
 import DashboardSidebar, { SidebarItem } from '@/components/DashboardSidebar';
+import VisitRequestsCard from '@/components/VisitRequestsCard';
 import { callHssApi } from '@/lib/hssApi';
 import { formatDisplayDate } from '@/lib/format';
 import {
@@ -265,6 +266,8 @@ export default function CoordinatorPage() {
                     </div>
                   )}
                 </div>
+
+                <VisitRequestsCard userId={userId} shakhaId={selectedShakhaId} />
               </>
             )}
           </div>

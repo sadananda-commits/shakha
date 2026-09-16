@@ -364,3 +364,32 @@ export interface ScheduleParticipationRow {
   // One entry per active Participant Type key, e.g. row['Shishu'].
   [typeKey: string]: string | number | boolean;
 }
+
+// --- Participant-facing content (all defined in Sheet tabs, not in code) ---
+
+export interface Announcement {
+  id: string;
+  message: string;
+  linkUrl: string;
+  linkLabel: string;
+}
+
+export interface UtilityLink {
+  id: string;
+  title: string;
+  description: string;
+  url: string;
+  category: string;
+}
+
+export interface ShakhaPreview {
+  shakha: Shakha;
+  nextSchedule: ScheduleEntry | null;
+  scheduleActivities: ScheduleActivity[];
+}
+
+export interface VisitRequestResult {
+  requestId: string;
+  shakhaName: string;
+  sessionDate: string;
+}
