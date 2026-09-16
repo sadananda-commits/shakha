@@ -49,12 +49,6 @@ export default function MyShakhaPage() {
     }
   }
 
-  function handleLogout() {
-    clearSessionUser();
-    setDashboard(null);
-    setView('login');
-  }
-
   return (
     <Layout>
       <div
@@ -83,7 +77,6 @@ export default function MyShakhaPage() {
         {view === 'dashboard' && dashboard && (
           <Dashboard
             dashboard={dashboard}
-            onLogout={handleLogout}
             onRefresh={() => loadDashboard(dashboard.user['User ID'])}
           />
         )}
@@ -304,11 +297,9 @@ const NAV_ITEMS: { key: Section; label: string }[] = [
 
 function Dashboard({
   dashboard,
-  onLogout,
   onRefresh,
 }: {
   dashboard: DashboardBundle;
-  onLogout: () => void;
   onRefresh: () => void;
 }) {
   const { user, shakha, nextSchedule, scheduleActivities, participants, attendance } = dashboard;
@@ -417,9 +408,6 @@ function Dashboard({
           )}
         </div>
 
-        <button onClick={onLogout} className="text-sm text-ink-light underline underline-offset-2">
-          Sign out
-        </button>
       </div>
 
       {/* Viewing someone else's Shakha: schedule + pramukhs + attend option. */}

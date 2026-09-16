@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import DashboardSidebar, { SidebarItem } from '@/components/DashboardSidebar';
-import BookReadingStats from '@/components/BookReadingStats';
+import ActivityStatsPanel from '@/components/ActivityStatsPanel';
 import ParticipationStats from '@/components/ParticipationStats';
+import ShakhaLeadersCard from '@/components/ShakhaLeadersCard';
+import ScheduleActivitiesTable from '@/components/ScheduleActivitiesTable';
+import { setAdminSession } from '@/components/UserMenu';
 import { callHssApi, HssApiError } from '@/lib/hssApi';
+import { formatDisplayDate } from '@/lib/format';
 import {
   AdminSummary,
   AreaOverviewRow,
@@ -11,11 +15,13 @@ import {
   Participant,
   Shakha,
   ShakhaOverviewCard,
+  ShakhaPreview,
+  User,
 } from '@/lib/types';
 
 const SESSION_KEY = 'hss_admin_email';
 
-type Section = 'overview' | 'summary' | 'areas' | 'reading' | 'participation' | 'search';
+type Section = 'overview' | 'summary' | 'areas' | 'activities' | 'participation' | 'search';
 
 export default function AdminPage() {
   const [status, setStatus] = useState<'checking' | 'loggedOut' | 'loggedIn'>('checking');
@@ -31,6 +37,7 @@ export default function AdminPage() {
     // manually-set localStorage value must never grant access on its own.
     callHssApi('getAdminSummary', { adminEmail: saved })
       .then(() => {
+        setAdminSession(saved, localStorage.getItem('hss_admin_name') || saved);
         setAdminEmail(saved);
         setStatus('loggedIn');
       })
@@ -67,14 +74,7 @@ export default function AdminPage() {
   return (
     <Layout>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
-        <AdminDashboard
-          adminEmail={adminEmail}
-          onLogout={() => {
-            localStorage.removeItem(SESSION_KEY);
-            setAdminEmail(null);
-            setStatus('loggedOut');
-          }}
-        />
+        <AdminDashboard adminEmail={adminEmail} />
       </div>
     </Layout>
   );
@@ -91,7 +91,8 @@ function AdminLoginForm({ onSuccess }: { onSuccess: (email: string) => void }) {
     setSubmitting(true);
     setError('');
     try {
-      await callHssApi('adminLogin', { email, password });
+      const user = await callHssApi<User>('adminLogin', { email, password });
+      setAdminSession(email, user['Full Name']);
       onSuccess(email);
     } catch (err) {
       setError(err instanceof HssApiError ? err.message : 'Something went wrong.');
@@ -135,12 +136,14 @@ function AdminLoginForm({ onSuccess }: { onSuccess: (email: string) => void }) {
   );
 }
 
-function AdminDashboard({ adminEmail, onLogout }: { adminEmail: string; onLogout: () => void }) {
+function AdminDashboard({ adminEmail }: { adminEmail: string }) {
   const [section, setSection] = useState<Section>('overview');
 
   // Overview (default)
   const [overviewCards, setOverviewCards] = useState<ShakhaOverviewCard[] | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
+  // Clicking a Shakha card drills into that Shakha's own dashboard view.
+  const [drillShakhaId, setDrillShakhaId] = useState('');
 
   // Summary counts
   const [summary, setSummary] = useState<AdminSummary | null>(null);
@@ -241,11 +244,11 @@ function AdminDashboard({ adminEmail, onLogout }: { adminEmail: string; onLogout
       active: section === 'areas',
     },
     {
-      key: 'reading',
-      label: 'Book Reading Stats',
-      description: 'Reading Marathon progress across all Shakhas.',
-      onClick: () => setSection('reading'),
-      active: section === 'reading',
+      key: 'activities',
+      label: 'Activity Stats',
+      description: 'Drill into any activity and break its numbers down by Shakha, participant type, age, and gender.',
+      onClick: () => setSection('activities'),
+      active: section === 'activities',
     },
     {
       key: 'participation',
@@ -265,18 +268,20 @@ function AdminDashboard({ adminEmail, onLogout }: { adminEmail: string; onLogout
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-display font-semibold text-ink">Admin Dashboard</h1>
-        <button onClick={onLogout} className="text-sm text-ink-light underline underline-offset-2">
-          Sign out
-        </button>
-      </div>
+      <h1 className="text-2xl font-display font-semibold text-ink">Admin Dashboard</h1>
 
       <div className="flex flex-col sm:flex-row gap-6">
         <DashboardSidebar items={sidebarItems} />
 
         <div className="flex-1 min-w-0 flex flex-col gap-6">
-          {section === 'overview' && (
+          {section === 'overview' && drillShakhaId && (
+            <ShakhaDrillDown
+              shakhaId={drillShakhaId}
+              onBack={() => setDrillShakhaId('')}
+            />
+          )}
+
+          {section === 'overview' && !drillShakhaId && (
             <div>
               <h2 className="text-lg font-display font-semibold text-ink mb-3">
                 All Shakhas — Next Session
@@ -288,7 +293,11 @@ function AdminDashboard({ adminEmail, onLogout }: { adminEmail: string; onLogout
               {!overviewLoading && overviewCards && overviewCards.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {overviewCards.map((c) => (
-                    <div key={c.shakhaId} className="bg-paper-raised rounded-card border border-ink/10 p-4">
+                    <button
+                      key={c.shakhaId}
+                      onClick={() => setDrillShakhaId(c.shakhaId)}
+                      className="text-left bg-paper-raised rounded-card border border-ink/10 p-4 hover:border-marigold transition-colors"
+                    >
                       <p className="font-display font-semibold text-ink">{c.shakhaName}</p>
                       <p className="text-xs text-ink-muted mt-0.5">{c.area} · {c.dayOfWeek}s</p>
                       <div className="mt-3 pt-3 border-t border-ink/10">
@@ -304,7 +313,7 @@ function AdminDashboard({ adminEmail, onLogout }: { adminEmail: string; onLogout
                           <p className="text-sm text-ink-muted">No upcoming session scheduled</p>
                         )}
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -380,7 +389,7 @@ function AdminDashboard({ adminEmail, onLogout }: { adminEmail: string; onLogout
             </div>
           )}
 
-          {section === 'reading' && <BookReadingStats />}
+          {section === 'activities' && <ActivityStatsPanel adminEmail={adminEmail} />}
 
           {section === 'participation' && (
             <>
@@ -491,6 +500,102 @@ function AdminDashboard({ adminEmail, onLogout }: { adminEmail: string; onLogout
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Admin drill-down into a single Shakha: the same "next session" view a
+ * participant sees on My Shakha, plus a condensed run-of-show and the
+ * Shakha's Pramukhs. Read-only — to actually manage a Shakha, an Admin
+ * uses the Coordinator Dashboard's Shakha picker as a super-user.
+ */
+function ShakhaDrillDown({ shakhaId, onBack }: { shakhaId: string; onBack: () => void }) {
+  const [preview, setPreview] = useState<ShakhaPreview | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    callHssApi<ShakhaPreview>('getShakhaPreview', { shakhaId })
+      .then(setPreview)
+      .catch(() => setPreview(null))
+      .finally(() => setLoading(false));
+  }, [shakhaId]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <button onClick={onBack} className="text-sm text-ink-light underline underline-offset-2 mb-2">
+          ← All Shakhas
+        </button>
+        <h2 className="text-lg font-display font-semibold text-ink">
+          {preview?.shakha['Shakha Name'] || 'Shakha'}
+        </h2>
+        {preview && (
+          <p className="text-sm text-ink-muted mt-0.5">
+            {[preview.shakha.Area, preview.shakha.City].filter(Boolean).join(' · ')}
+          </p>
+        )}
+      </div>
+
+      {loading && <p className="text-ink-muted text-sm">Loading…</p>}
+
+      {!loading && !preview && (
+        <p className="text-ink-muted text-sm">Couldn't load this Shakha.</p>
+      )}
+
+      {!loading && preview && (
+        <>
+          <div className="bg-paper-raised rounded-card border border-ink/10 p-5">
+            <p className="text-sm text-ink">
+              Meets {preview.shakha['Day of Week']}s, {preview.shakha['Start Time']}–
+              {preview.shakha['End Time']}
+            </p>
+            <p className="text-sm text-ink-muted mt-1">
+              {preview.shakha.Venue || preview.shakha.Address}
+            </p>
+            {preview.shakha['Coordinator Name'] && (
+              <p className="text-sm text-ink-muted mt-1">
+                Coordinator: {preview.shakha['Coordinator Name']}
+                {preview.shakha['Coordinator Contact']
+                  ? ` · ${preview.shakha['Coordinator Contact']}`
+                  : ''}
+              </p>
+            )}
+          </div>
+
+          {preview.nextSchedule ? (
+            <div className="bg-ink text-paper rounded-card p-5">
+              <p className="text-xs font-mono uppercase tracking-wide text-marigold mb-1">
+                Next Session
+              </p>
+              <p className="text-lg font-display font-semibold">
+                {formatDisplayDate(preview.nextSchedule.Date)} ·{' '}
+                {preview.nextSchedule['Start Time']}–{preview.nextSchedule['End Time']}
+              </p>
+              <p className="text-sm opacity-80 mt-1">{preview.nextSchedule.Location}</p>
+              {preview.nextSchedule.Notes && (
+                <p className="text-sm opacity-80 mt-2">{preview.nextSchedule.Notes}</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-ink-muted text-sm">
+              No upcoming session is published for this Shakha.
+            </p>
+          )}
+
+          {preview.scheduleActivities.length > 0 && (
+            <div>
+              <h3 className="text-sm font-display font-semibold text-ink mb-2">
+                Run of Show
+              </h3>
+              <ScheduleActivitiesTable activities={preview.scheduleActivities} />
+            </div>
+          )}
+
+          <ShakhaLeadersCard shakhaId={shakhaId} />
+        </>
+      )}
     </div>
   );
 }

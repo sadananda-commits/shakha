@@ -401,3 +401,49 @@ export interface ShakhaLeader {
   name: string;
   contact: string;
 }
+
+// --- Admin Activity Stats (replaces the book-reading-only view) ---
+
+export interface ActivityStatsListItem {
+  activityId: string;
+  activityName: string;
+  type: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  status: 'Upcoming' | 'Ongoing' | 'Historical';
+  shakhaId: string;
+  shakhaName: string;
+}
+
+export interface StatsBreakdownRow {
+  key: string;
+  label: string;
+  total: number;
+  entries: number;
+  participants: number;
+}
+
+export interface ActivityStatsDetailed {
+  activity: {
+    activityId: string;
+    activityName: string;
+    type: string;
+    description: string;
+    startDate: string;
+    endDate: string;
+  };
+  valueLabel: string;
+  overall: {
+    totalValue: number;
+    totalEntries: number;
+    totalParticipants: number;
+    totalShakhas: number;
+  };
+  byShakha: StatsBreakdownRow[];
+  byArea: StatsBreakdownRow[];
+  byParticipantType: StatsBreakdownRow[];
+  byGender: StatsBreakdownRow[];
+  byAgeBand: StatsBreakdownRow[];
+  topParticipants: StatsBreakdownRow[];
+}

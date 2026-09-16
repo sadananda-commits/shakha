@@ -2,30 +2,45 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 
-const SESSION_KEY = 'hss_user_id';
-const NAME_KEY = 'hss_user_name';
+const USER_KEY = 'hss_user_id';
+const USER_NAME_KEY = 'hss_user_name';
+const ADMIN_KEY = 'hss_admin_email';
+const ADMIN_NAME_KEY = 'hss_admin_name';
 
 /**
- * Shows the signed-in person's name with a Sign out button, or a Sign in
- * link when signed out. Place this in the right-hand side of the header
- * in components/Layout.tsx so it appears on every page.
+ * The single sign-in / sign-out control for the whole app. Renders as its
+ * own slim strip BELOW the header rather than inside it, so it never
+ * competes with the nav for horizontal space on narrow screens.
  *
- * The name is read from localStorage rather than fetched, so the header
- * renders instantly on every page without an API round-trip. My Shakha
- * writes it there on sign-in (see setSessionUser below) and clears it on
- * sign-out; the 'hss-session-change' event keeps this component in sync
- * when that happens in the same tab, and the native 'storage' event
- * covers other tabs.
+ * Place it in components/Layout.tsx directly after the sticky header
+ * wrapper. Because it's the one place sign-out lives, individual pages
+ * (My Shakha, Coordinator, Admin) must NOT render their own sign-out
+ * button — that's what caused it to appear twice.
+ *
+ * Handles both session kinds: the participant/coordinator session
+ * (hss_user_id) and the admin session (hss_admin_email).
  */
 export default function UserMenu() {
   const router = useRouter();
   const [name, setName] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     function sync() {
-      const userId = localStorage.getItem(SESSION_KEY);
-      setName(userId ? localStorage.getItem(NAME_KEY) || 'My Account' : null);
+      const userId = localStorage.getItem(USER_KEY);
+      const adminEmail = localStorage.getItem(ADMIN_KEY);
+
+      if (userId) {
+        setName(localStorage.getItem(USER_NAME_KEY) || 'My Account');
+        setIsAdmin(false);
+      } else if (adminEmail) {
+        setName(localStorage.getItem(ADMIN_NAME_KEY) || adminEmail);
+        setIsAdmin(true);
+      } else {
+        setName(null);
+        setIsAdmin(false);
+      }
       setReady(true);
     }
     sync();
@@ -38,51 +53,70 @@ export default function UserMenu() {
   }, []);
 
   function handleSignOut() {
+    const wasAdmin = isAdmin;
     clearSessionUser();
-    router.push('/my-shakha');
+    router.push(wasAdmin ? '/admin' : '/my-shakha');
   }
 
-  // Render nothing until localStorage has been read, so the server-rendered
-  // markup and the first client render agree (avoids a hydration mismatch).
-  if (!ready) return <div className="h-5" aria-hidden="true" />;
-
-  if (!name) {
-    return (
-      <Link
-        href="/my-shakha"
-        className="text-sm font-medium text-ink-light hover:text-ink transition-colors"
-      >
-        Sign in
-      </Link>
-    );
-  }
+  // Render a fixed-height placeholder until localStorage has been read, so
+  // the server markup and first client render agree (no hydration mismatch)
+  // and the page doesn't jump.
+  if (!ready) return <div className="h-9" aria-hidden="true" />;
 
   return (
-    <div className="flex items-center gap-3">
-      <span className="text-sm text-ink font-medium truncate max-w-[10rem]" title={name}>
-        {name}
-      </span>
-      <span className="text-ink/20" aria-hidden="true">|</span>
-      <button
-        onClick={handleSignOut}
-        className="text-sm text-ink-light hover:text-ink underline underline-offset-2 transition-colors"
-      >
-        Sign out
-      </button>
+    <div className="border-b border-ink/10 bg-paper">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-9 flex items-center justify-end gap-3">
+        {name ? (
+          <>
+            <span className="text-sm text-ink-muted">Signed in as</span>
+            <span className="text-sm text-ink font-medium truncate max-w-[12rem]" title={name}>
+              {name}
+            </span>
+            {isAdmin && (
+              <span className="text-[10px] font-mono uppercase tracking-wide bg-marigold/15 text-marigold-dark px-1.5 py-0.5 rounded">
+                Admin
+              </span>
+            )}
+            <span className="text-ink/20" aria-hidden="true">|</span>
+            <button
+              onClick={handleSignOut}
+              className="text-sm text-ink-light hover:text-ink underline underline-offset-2 transition-colors"
+            >
+              Sign out
+            </button>
+          </>
+        ) : (
+          <Link
+            href="/my-shakha"
+            className="text-sm font-medium text-ink-light hover:text-ink transition-colors"
+          >
+            Sign in
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
 
-/** Call on successful sign-in so the header picks up the name immediately. */
+/** Call on participant/coordinator sign-in. */
 export function setSessionUser(userId: string, fullName: string) {
-  localStorage.setItem(SESSION_KEY, userId);
-  localStorage.setItem(NAME_KEY, fullName || '');
+  localStorage.setItem(USER_KEY, userId);
+  localStorage.setItem(USER_NAME_KEY, fullName || '');
   window.dispatchEvent(new Event('hss-session-change'));
 }
 
-/** Call on sign-out. */
+/** Call on admin sign-in. */
+export function setAdminSession(email: string, fullName: string) {
+  localStorage.setItem(ADMIN_KEY, email);
+  localStorage.setItem(ADMIN_NAME_KEY, fullName || email);
+  window.dispatchEvent(new Event('hss-session-change'));
+}
+
+/** Clears whichever session is active. */
 export function clearSessionUser() {
-  localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem(NAME_KEY);
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(USER_NAME_KEY);
+  localStorage.removeItem(ADMIN_KEY);
+  localStorage.removeItem(ADMIN_NAME_KEY);
   window.dispatchEvent(new Event('hss-session-change'));
 }
