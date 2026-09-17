@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Layout from '@/components/Layout';
 import DashboardSidebar, { SidebarItem } from '@/components/DashboardSidebar';
@@ -16,7 +15,6 @@ import {
 const SESSION_KEY = 'hss_user_id';
 
 export default function CoordinatorPage() {
-  const router = useRouter();
   const [status, setStatus] = useState<'loading' | 'denied' | 'pickShakha' | 'ready'>('loading');
   const [userId, setUserId] = useState('');
   const [dash, setDash] = useState<DashboardBundle | null>(null);
@@ -29,8 +27,7 @@ export default function CoordinatorPage() {
 
   // Collapsed by default — these sections only load/render once the
   // Coordinator actually clicks in to see them.
-  const [participantsOpen, setParticipantsOpen] = useState(false);
-  const [visitRequestsOpen, setVisitRequestsOpen] = useState(false);
+  const [section, setSection] = useState<'overview' | 'participants' | 'visitRequests'>('overview');
 
   // Step 1: figure out who's logged in and whether they're a Coordinator
   // or an Admin acting as a super-user (Admins aren't tied to one Shakha,
@@ -139,9 +136,9 @@ export default function CoordinatorPage() {
     {
       key: 'overview',
       label: 'Overview',
-      description: 'Summary stats, next Shakha attendance, and participant search.',
-      href: '/coordinator',
-      active: router.pathname === '/coordinator',
+      description: 'Summary stats and next Shakha attendance.',
+      onClick: () => setSection('overview'),
+      active: section === 'overview',
     },
     {
       key: 'schedule',
@@ -160,6 +157,20 @@ export default function CoordinatorPage() {
       label: 'Record Shakha Numbers',
       description: 'Log attendee headcounts by category for each Shakha date.',
       href: '/coordinator/participation',
+    },
+    {
+      key: 'participants',
+      label: 'Participants',
+      description: 'Search and view participants registered with this Shakha.',
+      onClick: () => setSection('participants'),
+      active: section === 'participants',
+    },
+    {
+      key: 'visit-requests',
+      label: 'Visit Requests',
+      description: 'Review visit requests submitted for this Shakha.',
+      onClick: () => setSection('visitRequests'),
+      active: section === 'visitRequests',
     },
     {
       key: 'baudhik-repository',
@@ -217,116 +228,90 @@ export default function CoordinatorPage() {
 
             {bundle && (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {[
-                    { label: 'Total Participants', value: bundle.summary.totalParticipants },
-                    { label: 'Adults', value: bundle.summary.adults },
-                    { label: 'Children', value: bundle.summary.children },
-                    { label: 'Families', value: bundle.summary.families },
-                    { label: 'New (30 days)', value: bundle.summary.newParticipants },
-                    { label: 'Sessions Conducted', value: bundle.sessionsConducted },
-                  ].map((c) => (
-                    <div key={c.label} className="bg-paper-raised rounded-card border border-ink/10 p-4">
-                      <p className="text-2xl font-display font-semibold text-ink">{c.value}</p>
-                      <p className="text-xs text-ink-muted mt-1">{c.label}</p>
+                {section === 'overview' && (
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {[
+                        { label: 'Total Participants', value: bundle.summary.totalParticipants },
+                        { label: 'Adults', value: bundle.summary.adults },
+                        { label: 'Children', value: bundle.summary.children },
+                        { label: 'Families', value: bundle.summary.families },
+                        { label: 'New (30 days)', value: bundle.summary.newParticipants },
+                        { label: 'Sessions Conducted', value: bundle.sessionsConducted },
+                      ].map((c) => (
+                        <div key={c.label} className="bg-paper-raised rounded-card border border-ink/10 p-4">
+                          <p className="text-2xl font-display font-semibold text-ink">{c.value}</p>
+                          <p className="text-xs text-ink-muted mt-1">{c.label}</p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
 
-                {bundle.nextSchedule && (
-                  <div className="bg-ink text-paper rounded-card p-5 sm:p-6">
-                    <p className="text-xs font-mono uppercase tracking-wide text-marigold mb-2">
-                      Next Shakha — {formatDisplayDate(bundle.nextSchedule.Date)}
-                    </p>
-                    <div className="flex gap-6 text-sm">
-                      <span>Going: <strong>{bundle.nextShakhaAttendance.going}</strong></span>
-                      <span>Maybe: <strong>{bundle.nextShakhaAttendance.maybe}</strong></span>
-                      <span>Not attending: <strong>{bundle.nextShakhaAttendance.notGoing}</strong></span>
-                    </div>
+                    {bundle.nextSchedule && (
+                      <div className="bg-ink text-paper rounded-card p-5 sm:p-6">
+                        <p className="text-xs font-mono uppercase tracking-wide text-marigold mb-2">
+                          Next Shakha — {formatDisplayDate(bundle.nextSchedule.Date)}
+                        </p>
+                        <div className="flex gap-6 text-sm">
+                          <span>Going: <strong>{bundle.nextShakhaAttendance.going}</strong></span>
+                          <span>Maybe: <strong>{bundle.nextShakhaAttendance.maybe}</strong></span>
+                          <span>Not attending: <strong>{bundle.nextShakhaAttendance.notGoing}</strong></span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {section === 'participants' && (
+                  <div>
+                    <h2 className="text-lg font-display font-semibold text-ink mb-3">Participants</h2>
+                    <form onSubmit={handleSearch} className="flex gap-2 mb-4">
+                      <input
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search by name…"
+                        className="input"
+                      />
+                      <button type="submit" className="btn-primary whitespace-nowrap">Search</button>
+                    </form>
+
+                    {participants.length > 0 && (
+                      <div className="overflow-x-auto rounded-card border border-ink/10">
+                        <table className="w-full text-sm">
+                          <thead className="bg-paper-raised text-ink-muted text-xs uppercase tracking-wide">
+                            <tr>
+                              <th className="text-left px-4 py-2">Name</th>
+                              <th className="text-left px-4 py-2">Age</th>
+                              <th className="text-left px-4 py-2">Type</th>
+                              <th className="text-left px-4 py-2">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {participants.map((p) => (
+                              <tr key={p['Participant ID']} className="border-t border-ink/10">
+                                <td className="px-4 py-2 text-ink">{p['Participant Name']}</td>
+                                <td className="px-4 py-2 text-ink-light">{p.Age || '—'}</td>
+                                <td className="px-4 py-2 text-ink-light">{p['Participant Type']}</td>
+                                <td className="px-4 py-2 text-ink-light">{p['Active Status']}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                <CollapsibleSection
-                  title="Participants"
-                  open={participantsOpen}
-                  onToggle={() => setParticipantsOpen((o) => !o)}
-                >
-                  <form onSubmit={handleSearch} className="flex gap-2 mb-4">
-                    <input
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Search by name…"
-                      className="input"
-                    />
-                    <button type="submit" className="btn-primary whitespace-nowrap">Search</button>
-                  </form>
-
-                  {participants.length > 0 && (
-                    <div className="overflow-x-auto rounded-card border border-ink/10">
-                      <table className="w-full text-sm">
-                        <thead className="bg-paper-raised text-ink-muted text-xs uppercase tracking-wide">
-                          <tr>
-                            <th className="text-left px-4 py-2">Name</th>
-                            <th className="text-left px-4 py-2">Age</th>
-                            <th className="text-left px-4 py-2">Type</th>
-                            <th className="text-left px-4 py-2">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {participants.map((p) => (
-                            <tr key={p['Participant ID']} className="border-t border-ink/10">
-                              <td className="px-4 py-2 text-ink">{p['Participant Name']}</td>
-                              <td className="px-4 py-2 text-ink-light">{p.Age || '—'}</td>
-                              <td className="px-4 py-2 text-ink-light">{p['Participant Type']}</td>
-                              <td className="px-4 py-2 text-ink-light">{p['Active Status']}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </CollapsibleSection>
-
-                <CollapsibleSection
-                  title="Visit Requests"
-                  open={visitRequestsOpen}
-                  onToggle={() => setVisitRequestsOpen((o) => !o)}
-                >
-                  <VisitRequestsCard userId={userId} shakhaId={selectedShakhaId} />
-                </CollapsibleSection>
+                {section === 'visitRequests' && (
+                  <div>
+                    <h2 className="text-lg font-display font-semibold text-ink mb-3">Visit Requests</h2>
+                    <VisitRequestsCard userId={userId} shakhaId={selectedShakhaId} />
+                  </div>
+                )}
               </>
             )}
           </div>
         </div>
       </div>
     </Layout>
-  );
-}
-
-function CollapsibleSection({
-  title,
-  open,
-  onToggle,
-  children,
-}: {
-  title: string;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between text-left mb-3"
-      >
-        <h2 className="text-lg font-display font-semibold text-ink">{title}</h2>
-        <span className="text-sm text-ink-light underline underline-offset-2">
-          {open ? 'Hide −' : 'Show +'}
-        </span>
-      </button>
-      {open && children}
-    </div>
   );
 }
