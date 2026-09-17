@@ -264,6 +264,18 @@ function AdminDashboard({ adminEmail }: { adminEmail: string }) {
       onClick: () => setSection('search'),
       active: section === 'search',
     },
+    {
+      key: 'baudhik-repository',
+      label: 'Baudhik Repository',
+      description: 'Browse Baudhik session material.',
+      href: '/baudhik',
+    },
+    {
+      key: 'khel-repository',
+      label: 'Khel Repository',
+      description: 'Browse Khel session material.',
+      href: '/khel',
+    },
   ];
 
   return (

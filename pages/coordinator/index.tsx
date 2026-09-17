@@ -27,6 +27,11 @@ export default function CoordinatorPage() {
   const [query, setQuery] = useState('');
   const [deniedReason, setDeniedReason] = useState('');
 
+  // Collapsed by default — these sections only load/render once the
+  // Coordinator actually clicks in to see them.
+  const [participantsOpen, setParticipantsOpen] = useState(false);
+  const [visitRequestsOpen, setVisitRequestsOpen] = useState(false);
+
   // Step 1: figure out who's logged in and whether they're a Coordinator
   // or an Admin acting as a super-user (Admins aren't tied to one Shakha,
   // so they get a picker instead of loading a fixed shakha).
@@ -156,6 +161,18 @@ export default function CoordinatorPage() {
       description: 'Log attendee headcounts by category for each Shakha date.',
       href: '/coordinator/participation',
     },
+    {
+      key: 'baudhik-repository',
+      label: 'Baudhik Repository',
+      description: 'Browse Baudhik session material.',
+      href: '/baudhik',
+    },
+    {
+      key: 'khel-repository',
+      label: 'Khel Repository',
+      description: 'Browse Khel session material.',
+      href: '/khel',
+    },
   ];
 
   return (
@@ -229,8 +246,11 @@ export default function CoordinatorPage() {
                   </div>
                 )}
 
-                <div>
-                  <h2 className="text-lg font-display font-semibold text-ink mb-3">Participants</h2>
+                <CollapsibleSection
+                  title="Participants"
+                  open={participantsOpen}
+                  onToggle={() => setParticipantsOpen((o) => !o)}
+                >
                   <form onSubmit={handleSearch} className="flex gap-2 mb-4">
                     <input
                       value={query}
@@ -265,14 +285,48 @@ export default function CoordinatorPage() {
                       </table>
                     </div>
                   )}
-                </div>
+                </CollapsibleSection>
 
-                <VisitRequestsCard userId={userId} shakhaId={selectedShakhaId} />
+                <CollapsibleSection
+                  title="Visit Requests"
+                  open={visitRequestsOpen}
+                  onToggle={() => setVisitRequestsOpen((o) => !o)}
+                >
+                  <VisitRequestsCard userId={userId} shakhaId={selectedShakhaId} />
+                </CollapsibleSection>
               </>
             )}
           </div>
         </div>
       </div>
     </Layout>
+  );
+}
+
+function CollapsibleSection({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between text-left mb-3"
+      >
+        <h2 className="text-lg font-display font-semibold text-ink">{title}</h2>
+        <span className="text-sm text-ink-light underline underline-offset-2">
+          {open ? 'Hide −' : 'Show +'}
+        </span>
+      </button>
+      {open && children}
+    </div>
   );
 }

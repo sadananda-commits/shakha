@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import Layout from '@/components/Layout';
 import NextShakhaCard from '@/components/NextShakhaCard';
 import ActivitiesCard from '@/components/ActivitiesCard';
@@ -295,6 +296,13 @@ const NAV_ITEMS: { key: Section; label: string }[] = [
   { key: 'participants', label: 'My Participants' },
 ];
 
+// Repository pages are separate routes, not in-page sections, so they're
+// rendered as links inside the same nav column rather than as NAV_ITEMS.
+const REPOSITORY_LINKS: { href: string; label: string }[] = [
+  { href: '/baudhik', label: 'Baudhik Repository' },
+  { href: '/khel', label: 'Khel Repository' },
+];
+
 function Dashboard({
   dashboard,
   onRefresh,
@@ -496,6 +504,15 @@ function Dashboard({
                 >
                   {item.label}
                 </button>
+              ))}
+              {REPOSITORY_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="text-left px-4 py-2.5 rounded-card whitespace-nowrap text-sm font-medium text-ink-light hover:bg-paper-raised transition-colors"
+                >
+                  {link.label}
+                </Link>
               ))}
             </div>
           </nav>
