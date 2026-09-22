@@ -19,6 +19,22 @@ import {
   User,
 } from '@/lib/types';
 
+// TODO(backend): getShakhaOverviewCards should start returning these two
+// fields per card. Kept as an intersection here so this file compiles
+// whether or not lib/types.ts has been updated yet — once it has, this
+// type alias can just become `ShakhaOverviewCard` again.
+type OverviewCard = ShakhaOverviewCard & {
+  registeredCount?: number;
+  avgWeeklyAttendanceYTD?: number;
+};
+
+// TODO(backend): getShakhaPreview should start returning the Shakha's full
+// participant roster so the drill-down can show registered count,
+// composition, and the detailed list without a second round trip.
+type ShakhaPreviewWithParticipants = ShakhaPreview & {
+  participants?: Participant[];
+};
+
 const SESSION_KEY = 'hss_admin_email';
 
 type Section = 'overview' | 'summary' | 'areas' | 'activities' | 'participation' | 'search';
@@ -140,7 +156,7 @@ function AdminDashboard({ adminEmail }: { adminEmail: string }) {
   const [section, setSection] = useState<Section>('overview');
 
   // Overview (default)
-  const [overviewCards, setOverviewCards] = useState<ShakhaOverviewCard[] | null>(null);
+  const [overviewCards, setOverviewCards] = useState<OverviewCard[] | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   // Clicking a Shakha card drills into that Shakha's own dashboard view.
   const [drillShakhaId, setDrillShakhaId] = useState('');
@@ -168,7 +184,7 @@ function AdminDashboard({ adminEmail }: { adminEmail: string }) {
   // Load the default Overview cards once, right away.
   useEffect(() => {
     setOverviewLoading(true);
-    callHssApi<ShakhaOverviewCard[]>('getShakhaOverviewCards', { adminEmail })
+    callHssApi<OverviewCard[]>('getShakhaOverviewCards', { adminEmail })
       .then(setOverviewCards)
       .catch(() => setOverviewCards([]))
       .finally(() => setOverviewLoading(false));
@@ -312,6 +328,22 @@ function AdminDashboard({ adminEmail }: { adminEmail: string }) {
                     >
                       <p className="font-display font-semibold text-ink">{c.shakhaName}</p>
                       <p className="text-xs text-ink-muted mt-0.5">{c.area} · {c.dayOfWeek}s</p>
+
+                      <div className="mt-3 pt-3 border-t border-ink/10 grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-xs text-ink-muted uppercase tracking-wide">Registered</p>
+                          <p className="text-sm text-ink font-medium">
+                            {c.registeredCount ?? '—'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-ink-muted uppercase tracking-wide">Avg/Week YTD</p>
+                          <p className="text-sm text-ink font-medium">
+                            {c.avgWeeklyAttendanceYTD != null ? c.avgWeeklyAttendanceYTD.toFixed(1) : '—'}
+                          </p>
+                        </div>
+                      </div>
+
                       <div className="mt-3 pt-3 border-t border-ink/10">
                         {c.nextDate ? (
                           <>
@@ -523,16 +555,23 @@ function AdminDashboard({ adminEmail }: { adminEmail: string }) {
  * uses the Coordinator Dashboard's Shakha picker as a super-user.
  */
 function ShakhaDrillDown({ shakhaId, onBack }: { shakhaId: string; onBack: () => void }) {
-  const [preview, setPreview] = useState<ShakhaPreview | null>(null);
+  const [preview, setPreview] = useState<ShakhaPreviewWithParticipants | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showLeaders, setShowLeaders] = useState(false);
+  const [showDetailedList, setShowDetailedList] = useState(false);
 
   useEffect(() => {
     setLoading(true);
-    callHssApi<ShakhaPreview>('getShakhaPreview', { shakhaId })
+    setShowLeaders(false);
+    setShowDetailedList(false);
+    callHssApi<ShakhaPreviewWithParticipants>('getShakhaPreview', { shakhaId })
       .then(setPreview)
       .catch(() => setPreview(null))
       .finally(() => setLoading(false));
   }, [shakhaId]);
+
+  const participants = preview?.participants ?? [];
+  const composition = summarizeComposition(participants);
 
   return (
     <div className="flex flex-col gap-6">
@@ -605,9 +644,91 @@ function ShakhaDrillDown({ shakhaId, onBack }: { shakhaId: string; onBack: () =>
             </div>
           )}
 
-          <ShakhaLeadersCard shakhaId={shakhaId} />
+          <div className="bg-paper-raised rounded-card border border-ink/10 p-5">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-xs font-mono uppercase tracking-wide text-marigold-dark">
+                  Registered Participants
+                </p>
+                <p className="text-2xl font-display font-semibold text-ink">{participants.length}</p>
+              </div>
+              {participants.length > 0 && (
+                <button
+                  onClick={() => setShowDetailedList((o) => !o)}
+                  className="text-sm text-marigold-dark underline underline-offset-2"
+                >
+                  {showDetailedList ? 'Hide detailed list' : 'Show detailed list'}
+                </button>
+              )}
+            </div>
+
+            {composition.length > 0 && (
+              <div className="mt-4 overflow-x-auto rounded-card border border-ink/10">
+                <table className="w-full text-sm">
+                  <thead className="bg-ink/5 text-ink-muted text-xs uppercase tracking-wide">
+                    <tr>
+                      <th className="text-left px-4 py-2">Category</th>
+                      <th className="text-right px-4 py-2">Count</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {composition.map(([type, count]) => (
+                      <tr key={type} className="border-t border-ink/10">
+                        <td className="px-4 py-2 text-ink">{type}</td>
+                        <td className="px-4 py-2 text-right text-ink font-medium">{count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {showDetailedList && participants.length > 0 && (
+              <div className="mt-4 overflow-x-auto rounded-card border border-ink/10">
+                <table className="w-full text-sm">
+                  <thead className="bg-ink/5 text-ink-muted text-xs uppercase tracking-wide">
+                    <tr>
+                      <th className="text-left px-4 py-2">Name</th>
+                      <th className="text-left px-4 py-2">Category</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {participants.map((p) => (
+                      <tr key={p['Participant ID']} className="border-t border-ink/10">
+                        <td className="px-4 py-2 text-ink">{p['Participant Name']}</td>
+                        <td className="px-4 py-2 text-ink-light">{p['Participant Type']}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <button
+              onClick={() => setShowLeaders((o) => !o)}
+              className="w-full flex items-center justify-between text-left mb-2"
+            >
+              <h3 className="text-sm font-display font-semibold text-ink">Pramukhs</h3>
+              <span className="text-sm text-ink-light underline underline-offset-2">
+                {showLeaders ? 'Hide −' : 'Show +'}
+              </span>
+            </button>
+            {showLeaders && <ShakhaLeadersCard shakhaId={shakhaId} />}
+          </div>
         </>
       )}
     </div>
   );
+}
+
+/** Groups a participant roster by Participant Type, counts descending. */
+function summarizeComposition(participants: Participant[]): [string, number][] {
+  const counts = new Map<string, number>();
+  participants.forEach((p) => {
+    const type = p['Participant Type'] || 'Other';
+    counts.set(type, (counts.get(type) || 0) + 1);
+  });
+  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
 }
