@@ -28,11 +28,15 @@ type OverviewCard = ShakhaOverviewCard & {
   avgWeeklyAttendanceYTD?: number;
 };
 
-// TODO(backend): getShakhaPreview should start returning the Shakha's full
-// participant roster so the drill-down can show registered count,
-// composition, and the detailed list without a second round trip.
-type ShakhaPreviewWithParticipants = ShakhaPreview & {
-  participants?: Participant[];
+// Shape returned by the new admin-only getShakhaParticipantSummary action.
+// Deliberately a separate call from getShakhaPreview (which is public —
+// used by the unauthenticated "Find a Shakha" browser) rather than
+// smuggled onto it, so participant names are never exposed there.
+type ShakhaParticipantSummary = {
+  shakhaId: string;
+  total: number;
+  composition: { key: string; label: string; count: number }[];
+  participants: { participantId: string; name: string; age?: number; gender?: string; typeKey: string; typeLabel: string }[];
 };
 
 const SESSION_KEY = 'hss_admin_email';
@@ -305,6 +309,7 @@ function AdminDashboard({ adminEmail }: { adminEmail: string }) {
           {section === 'overview' && drillShakhaId && (
             <ShakhaDrillDown
               shakhaId={drillShakhaId}
+              adminEmail={adminEmail}
               onBack={() => setDrillShakhaId('')}
             />
           )}
@@ -554,9 +559,19 @@ function AdminDashboard({ adminEmail }: { adminEmail: string }) {
  * Shakha's Pramukhs. Read-only — to actually manage a Shakha, an Admin
  * uses the Coordinator Dashboard's Shakha picker as a super-user.
  */
-function ShakhaDrillDown({ shakhaId, onBack }: { shakhaId: string; onBack: () => void }) {
-  const [preview, setPreview] = useState<ShakhaPreviewWithParticipants | null>(null);
+function ShakhaDrillDown({
+  shakhaId,
+  adminEmail,
+  onBack,
+}: {
+  shakhaId: string;
+  adminEmail: string;
+  onBack: () => void;
+}) {
+  const [preview, setPreview] = useState<ShakhaPreview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<ShakhaParticipantSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const [showLeaders, setShowLeaders] = useState(false);
   const [showDetailedList, setShowDetailedList] = useState(false);
 
@@ -564,14 +579,20 @@ function ShakhaDrillDown({ shakhaId, onBack }: { shakhaId: string; onBack: () =>
     setLoading(true);
     setShowLeaders(false);
     setShowDetailedList(false);
-    callHssApi<ShakhaPreviewWithParticipants>('getShakhaPreview', { shakhaId })
+    callHssApi<ShakhaPreview>('getShakhaPreview', { shakhaId })
       .then(setPreview)
       .catch(() => setPreview(null))
       .finally(() => setLoading(false));
-  }, [shakhaId]);
 
-  const participants = preview?.participants ?? [];
-  const composition = summarizeComposition(participants);
+    setSummaryLoading(true);
+    callHssApi<ShakhaParticipantSummary>('getShakhaParticipantSummary', { adminEmail, shakhaId })
+      .then(setSummary)
+      .catch(() => setSummary(null))
+      .finally(() => setSummaryLoading(false));
+  }, [shakhaId, adminEmail]);
+
+  const participants = summary?.participants ?? [];
+  const composition = summary?.composition ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -650,7 +671,9 @@ function ShakhaDrillDown({ shakhaId, onBack }: { shakhaId: string; onBack: () =>
                 <p className="text-xs font-mono uppercase tracking-wide text-marigold-dark">
                   Registered Participants
                 </p>
-                <p className="text-2xl font-display font-semibold text-ink">{participants.length}</p>
+                <p className="text-2xl font-display font-semibold text-ink">
+                  {summaryLoading ? '…' : summary?.total ?? 0}
+                </p>
               </div>
               {participants.length > 0 && (
                 <button
@@ -662,7 +685,9 @@ function ShakhaDrillDown({ shakhaId, onBack }: { shakhaId: string; onBack: () =>
               )}
             </div>
 
-            {composition.length > 0 && (
+            {summaryLoading && <p className="text-ink-muted text-sm mt-3">Loading…</p>}
+
+            {!summaryLoading && composition.length > 0 && (
               <div className="mt-4 overflow-x-auto rounded-card border border-ink/10">
                 <table className="w-full text-sm">
                   <thead className="bg-ink/5 text-ink-muted text-xs uppercase tracking-wide">
@@ -672,10 +697,10 @@ function ShakhaDrillDown({ shakhaId, onBack }: { shakhaId: string; onBack: () =>
                     </tr>
                   </thead>
                   <tbody>
-                    {composition.map(([type, count]) => (
-                      <tr key={type} className="border-t border-ink/10">
-                        <td className="px-4 py-2 text-ink">{type}</td>
-                        <td className="px-4 py-2 text-right text-ink font-medium">{count}</td>
+                    {composition.map((c) => (
+                      <tr key={c.key || c.label} className="border-t border-ink/10">
+                        <td className="px-4 py-2 text-ink">{c.label}</td>
+                        <td className="px-4 py-2 text-right text-ink font-medium">{c.count}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -694,9 +719,9 @@ function ShakhaDrillDown({ shakhaId, onBack }: { shakhaId: string; onBack: () =>
                   </thead>
                   <tbody>
                     {participants.map((p) => (
-                      <tr key={p['Participant ID']} className="border-t border-ink/10">
-                        <td className="px-4 py-2 text-ink">{p['Participant Name']}</td>
-                        <td className="px-4 py-2 text-ink-light">{p['Participant Type']}</td>
+                      <tr key={p.participantId} className="border-t border-ink/10">
+                        <td className="px-4 py-2 text-ink">{p.name}</td>
+                        <td className="px-4 py-2 text-ink-light">{p.typeLabel}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -721,14 +746,4 @@ function ShakhaDrillDown({ shakhaId, onBack }: { shakhaId: string; onBack: () =>
       )}
     </div>
   );
-}
-
-/** Groups a participant roster by Participant Type, counts descending. */
-function summarizeComposition(participants: Participant[]): [string, number][] {
-  const counts = new Map<string, number>();
-  participants.forEach((p) => {
-    const type = p['Participant Type'] || 'Other';
-    counts.set(type, (counts.get(type) || 0) + 1);
-  });
-  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
 }
