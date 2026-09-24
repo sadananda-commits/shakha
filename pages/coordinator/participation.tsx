@@ -5,7 +5,7 @@ import Layout from '@/components/Layout';
 import DashboardSidebar, { SidebarItem } from '@/components/DashboardSidebar';
 import { callHssApi } from '@/lib/hssApi';
 import { formatDisplayDate } from '@/lib/format';
-import { DashboardBundle, Shakha, ScheduleParticipationRow, ParticipantType } from '@/lib/types';
+import { DashboardBundle, Shakha, ScheduleParticipationRow } from '@/lib/types';
 import { useParticipantTypes } from '@/lib/participation';
 
 const SESSION_KEY = 'hss_user_id';
@@ -18,10 +18,14 @@ type Person = {
   familyName: string;
   relationship: string;
   age: number | null;
-  typeKey: string; // '' when no category could be worked out
+  typeKey: string; // falls back to 'Others' when no age category fits
+  noCategory: boolean; // true when typeKey is only 'Others' because no category could be worked out
   rsvp: string; // 'Yes' | 'No' | 'Not Sure' | 'No Response' | ''
-  attended: boolean; // already confirmed and saved
+  attended: boolean; // confirmed by the coordinator and saved
+  notAttended: boolean; // marked Not Attended by the coordinator and saved
 };
+
+type DayType = { key: string; label: string };
 
 type ShakhaDay = {
   scheduleId: string;
@@ -29,6 +33,7 @@ type ShakhaDay = {
   reported: boolean;
   headcountOnly: boolean; // numbers from the old count form, no named attendees
   summary: { counts: Record<string, number>; total: number };
+  types: DayType[]; // active categories in display order, including Others
   people: Person[];
 };
 
@@ -82,10 +87,20 @@ function personLabel(p: Person) {
   return p.familyName && p.familyName !== p.name ? `${p.name} — ${p.familyName}'s family` : p.name;
 }
 
-function describeAttendance(types: ParticipantType[], counts: Record<string, number>, date: string) {
-  const parts = types
-    .filter((t) => (counts[t['Type Key']] || 0) > 0)
-    .map((t) => `${counts[t['Type Key']]} ${t['Label']}`);
+/** Restored people go back next to their family if it is already in the list, otherwise at the bottom. */
+function insertNearFamily(list: string[], id: string, byId: Record<string, Person>): string[] {
+  const p = byId[id];
+  if (!p || list.includes(id)) return list;
+  let last = -1;
+  list.forEach((x, i) => {
+    if (p.familyId && byId[x]?.familyId === p.familyId) last = i;
+  });
+  if (last === -1) return [...list, id];
+  return [...list.slice(0, last + 1), id, ...list.slice(last + 1)];
+}
+
+function describeAttendance(types: DayType[], counts: Record<string, number>, date: string) {
+  const parts = types.filter((t) => (counts[t.key] || 0) > 0).map((t) => `${counts[t.key]} ${t.label}`);
   if (parts.length === 0) return 'No attendance has been confirmed for this date.';
   return `On ${formatDisplayDate(date)} the Shakha was attended by ${parts.join(', ')}.`;
 }
@@ -118,7 +133,7 @@ function MonthCalendar({
   const label = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }).format(month);
 
   return (
-    <div className="bg-paper-raised rounded-card border border-ink/10 p-3 w-full lg:w-72">
+    <div className="bg-paper-raised rounded-card border border-ink/10 p-3 w-full sm:w-72 shrink-0">
       <div className="flex items-center justify-between mb-2">
         <button
           type="button"
@@ -235,6 +250,8 @@ export default function RecordShakhaNumbersPage() {
   const [mode, setMode] = useState<'summary' | 'edit'>('edit');
   const [rowIds, setRowIds] = useState<string[]>([]); // people shown in the table, in display order
   const [attendedIds, setAttendedIds] = useState<string[]>([]); // people the coordinator has confirmed
+  const [notAttendedIds, setNotAttendedIds] = useState<string[]>([]); // registered people marked Not Attended
+  const [showNotAttended, setShowNotAttended] = useState(false);
   const [addingRow, setAddingRow] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -322,10 +339,11 @@ export default function RecordShakhaNumbersPage() {
 
   const dirty = useMemo(() => {
     if (!day) return false;
-    const saved = day.people.filter((p) => p.attended).map((p) => p.participantId).sort().join('|');
-    const current = [...attendedIds].sort().join('|');
-    return saved !== current;
-  }, [day, attendedIds]);
+    const key = (ids: string[]) => [...ids].sort().join('|');
+    const savedAttended = day.people.filter((p) => p.attended).map((p) => p.participantId);
+    const savedNot = day.people.filter((p) => p.notAttended).map((p) => p.participantId);
+    return key(savedAttended) !== key(attendedIds) || key(savedNot) !== key(notAttendedIds);
+  }, [day, attendedIds, notAttendedIds]);
 
   // Warn before closing the tab with unsaved confirmations.
   useEffect(() => {
@@ -338,7 +356,10 @@ export default function RecordShakhaNumbersPage() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
-  const typeLabel = (key: string) => types.find((t) => t['Type Key'] === key)?.['Label'] ?? '';
+  // The day payload carries its own category list (it always includes Others); the hook's copy
+  // can be older than the sheet, so it is only used before a date is open.
+  const dayTypes: DayType[] = day ? day.types : types.map((t) => ({ key: t['Type Key'], label: t['Label'] }));
+  const typeLabel = (key: string) => dayTypes.find((t) => t.key === key)?.label ?? key;
 
   /** Puts a server payload on screen. Rows = everyone who RSVP'd Yes plus anyone already confirmed. */
   function applyDay(d: ShakhaDay, nextMode: 'summary' | 'edit') {
@@ -346,10 +367,14 @@ export default function RecordShakhaNumbersPage() {
     d.people.forEach((p) => {
       byId[p.participantId] = p;
     });
-    const shown = d.people.filter((p) => p.rsvp === 'Yes' || p.attended).map((p) => p.participantId);
+    // Table = registered people not marked Not Attended, plus anyone already confirmed (e.g. added by the coordinator).
+    const shown = d.people
+      .filter((p) => (p.rsvp === 'Yes' && !p.notAttended) || p.attended)
+      .map((p) => p.participantId);
     setDay(d);
     setRowIds(sortIds(shown, byId));
     setAttendedIds(d.people.filter((p) => p.attended).map((p) => p.participantId));
+    setNotAttendedIds(d.people.filter((p) => p.notAttended).map((p) => p.participantId));
     setMode(nextMode);
     setAddingRow(false);
   }
@@ -390,7 +415,8 @@ export default function RecordShakhaNumbersPage() {
     setDay(null);
     setJustSaved(false);
     setSaveError('');
-    setCalendarOpen(false); // on phones the calendar folds away once a date is chosen
+    setShowNotAttended(false);
+    setCalendarOpen(false); // the calendar folds into a one-line bar so the table gets the full width
     loadDay(row.scheduleId);
   }
 
@@ -401,7 +427,9 @@ export default function RecordShakhaNumbersPage() {
     setDayError('');
     setRowIds([]);
     setAttendedIds([]);
+    setNotAttendedIds([]);
     setAddingRow(false);
+    setShowNotAttended(false);
     setCalendarOpen(true);
   }
 
@@ -424,6 +452,20 @@ export default function RecordShakhaNumbersPage() {
     setAttendedIds((prev) => prev.filter((x) => x !== id));
   }
 
+  /** A registered person who didn't come: leaves the table, saved as Not Attended. */
+  function markNotAttended(id: string) {
+    setJustSaved(false);
+    setRowIds((prev) => prev.filter((x) => x !== id));
+    setAttendedIds((prev) => prev.filter((x) => x !== id));
+    setNotAttendedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  }
+
+  function restoreNotAttended(id: string) {
+    setJustSaved(false);
+    setNotAttendedIds((prev) => prev.filter((x) => x !== id));
+    setRowIds((prev) => insertNearFamily(prev, id, peopleById));
+  }
+
   async function handleSave() {
     if (!day) return;
     setSaving(true);
@@ -435,6 +477,7 @@ export default function RecordShakhaNumbersPage() {
         shakhaId: selectedShakhaId,
         scheduleId: day.scheduleId,
         attendedIds: JSON.stringify(attendedIds),
+        notAttendedIds: JSON.stringify(notAttendedIds),
       });
       applyDay(saved, 'edit'); // rebuilds the list re-sorted by family
       setJustSaved(true);
@@ -449,18 +492,16 @@ export default function RecordShakhaNumbersPage() {
   // Live counts for the summary under the table
   const liveCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    let uncategorised = 0;
+    const others: Person[] = []; // confirmed people with no age category: counted under Others
     attendedIds.forEach((id) => {
       const p = peopleById[id];
       if (!p) return;
-      if (p.typeKey && types.some((t) => t['Type Key'] === p.typeKey)) {
-        counts[p.typeKey] = (counts[p.typeKey] || 0) + 1;
-      } else {
-        uncategorised++;
-      }
+      counts[p.typeKey] = (counts[p.typeKey] || 0) + 1;
+      if (p.noCategory) others.push(p);
     });
-    return { counts, uncategorised };
-  }, [attendedIds, peopleById, types]);
+    others.sort((a, b) => a.name.localeCompare(b.name));
+    return { counts, others };
+  }, [attendedIds, peopleById]);
 
   // Consecutive rows from the same family are drawn as one group.
   const runs = useMemo(() => {
@@ -488,6 +529,15 @@ export default function RecordShakhaNumbersPage() {
         return true;
       }),
     [rows, onlyUnreported, dateFilter]
+  );
+
+  const notAttendedPeople = useMemo(
+    () =>
+      notAttendedIds
+        .map((id) => peopleById[id])
+        .filter((p): p is Person => !!p)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [notAttendedIds, peopleById]
   );
 
   // ----- early returns (all hooks are above this line) -----
@@ -553,7 +603,8 @@ export default function RecordShakhaNumbersPage() {
   })();
 
   const liveTotal = Object.values(liveCounts.counts).reduce((a, b) => a + b, 0);
-  const typesReady = types.length > 0;
+  const typesReady = dayTypes.length > 0;
+  const pendingCount = rowIds.filter((id) => !attendedIds.includes(id)).length;
 
   return (
     <Layout>
@@ -653,9 +704,9 @@ export default function RecordShakhaNumbersPage() {
                             <thead className="bg-paper-raised text-ink-muted text-xs uppercase tracking-wide">
                               <tr>
                                 <th className="text-left px-4 py-2">Date</th>
-                                {types.map((t) => (
-                                  <th key={t['Type Key']} className="px-3 py-2 text-center" title={t['Label']}>
-                                    {t['Type Key']}
+                                {dayTypes.map((t) => (
+                                  <th key={t.key} className="px-3 py-2 text-center" title={t.label}>
+                                    {t.key}
                                   </th>
                                 ))}
                                 <th className="px-3 py-2 text-center">Total</th>
@@ -697,9 +748,9 @@ export default function RecordShakhaNumbersPage() {
                                         )}
                                       </span>
                                     </td>
-                                    {types.map((t) => (
-                                      <td key={t['Type Key']} className="px-3 py-2 text-center text-ink-light">
-                                        {row.reported ? Number(record[t['Type Key']]) || 0 : '—'}
+                                    {dayTypes.map((t) => (
+                                      <td key={t.key} className="px-3 py-2 text-center text-ink-light">
+                                        {row.reported ? Number(record[t.key]) || 0 : '—'}
                                       </td>
                                     ))}
                                     <td className="px-3 py-2 text-center font-medium text-ink">
@@ -716,8 +767,9 @@ export default function RecordShakhaNumbersPage() {
                   )}
                 </div>
 
-                <div className="flex flex-col lg:flex-row gap-5 items-start">
-                  <div className={`${calendarOpen ? 'block' : 'hidden'} lg:block w-full lg:w-auto`}>
+                {/* Date picker: full calendar until a date is chosen, then a one-line bar */}
+                {(!selectedDate || calendarOpen) && (
+                  <div className="flex flex-col sm:flex-row gap-4 sm:items-start">
                     <MonthCalendar
                       month={viewMonth}
                       onMonthChange={goToMonth}
@@ -726,275 +778,335 @@ export default function RecordShakhaNumbersPage() {
                       today={today}
                       onSelect={selectDate}
                     />
-                  </div>
-
-                  <div className="flex-1 min-w-0 w-full flex flex-col gap-4">
-                    {!selectedDate && (
-                      <p className="text-ink-muted text-sm">
+                    <div className="text-sm text-ink-muted flex flex-col gap-2">
+                      <p>
                         {!rowsLoading && rows.length === 0
                           ? `No Shakha dates are scheduled in ${year}.`
-                          : 'Choose a Shakha date from the calendar to record who attended.'}
+                          : 'Choose a Shakha date to record who attended.'}
                       </p>
-                    )}
+                      {selectedDate && (
+                        <button
+                          type="button"
+                          onClick={() => setCalendarOpen(false)}
+                          className="self-start text-ink-light underline underline-offset-2"
+                        >
+                          Close calendar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
 
-                    {selectedDate && (
-                      <div className="flex items-center justify-between gap-3 flex-wrap">
-                        <h2 className="text-lg font-display font-semibold text-ink">
-                          {formatDisplayDate(selectedDate)}
-                        </h2>
-                        <div className="flex items-center gap-3">
-                          {mode === 'edit' && day?.reported && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (!confirmDiscard()) return;
-                                applyDay(day, 'summary');
-                              }}
-                              className="text-sm text-ink-light underline underline-offset-2"
-                            >
-                              Back to summary
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setCalendarOpen(true)}
-                            className="lg:hidden text-sm text-ink-light underline underline-offset-2"
-                          >
-                            Change date
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                {selectedDate && !calendarOpen && (
+                  <div className="flex items-center justify-between gap-3 flex-wrap rounded-card border border-ink/10 bg-paper-raised px-4 py-2.5">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <h2 className="text-base font-display font-semibold text-ink">
+                        {formatDisplayDate(selectedDate)}
+                      </h2>
+                      <span className="flex items-center gap-1.5 text-xs text-ink-muted">
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            rowByDate[selectedDate]?.reported ? 'bg-sage' : 'bg-marigold'
+                          }`}
+                        />
+                        {rowByDate[selectedDate]?.reported ? 'Reported' : 'Not reported yet'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCalendarOpen(true)}
+                      className="rounded-md border border-ink/30 px-3 py-1 text-sm text-ink hover:bg-paper"
+                    >
+                      Change date
+                    </button>
+                  </div>
+                )}
 
-                    {selectedDate && (dayLoading || !typesReady) && !dayError && (
-                      <p className="text-ink-muted text-sm">Loading…</p>
-                    )}
+                {selectedDate && dayLoading && !dayError && <p className="text-ink-muted text-sm">Loading…</p>}
 
-                    {dayError && (
-                      <p className="text-sm text-marigold-dark" role="alert">
-                        {dayError}
-                      </p>
-                    )}
+                {dayError && (
+                  <p className="text-sm text-marigold-dark" role="alert">
+                    {dayError}
+                  </p>
+                )}
 
-                    {/* ---- Saved date: short summary ---- */}
-                    {day && typesReady && !dayLoading && mode === 'summary' && (
-                      <div className="bg-paper-raised rounded-card border border-ink/10 p-4 sm:p-5 flex flex-col gap-4">
-                        <p className="text-sm text-ink">{describeAttendance(types, day.summary.counts, day.date)}</p>
+                {/* ---- Saved date: short summary ---- */}
+                {day && !dayLoading && mode === 'summary' && (
+                  <div className="bg-paper-raised rounded-card border border-ink/10 p-4 sm:p-5 flex flex-col gap-4">
+                    <p className="text-sm text-ink">{describeAttendance(day.types, day.summary.counts, day.date)}</p>
 
-                        {day.summary.total > 0 && (
-                          <table className="text-sm border-collapse w-full max-w-xs">
-                            <tbody>
-                              {types
-                                .filter((t) => (day.summary.counts[t['Type Key']] || 0) > 0)
-                                .map((t) => (
-                                  <tr key={t['Type Key']} className="border-t border-ink/10">
-                                    <td className="py-1.5 pr-4 text-ink-light">{t['Label']}</td>
-                                    <td className="py-1.5 text-right text-ink">{day.summary.counts[t['Type Key']]}</td>
-                                  </tr>
-                                ))}
-                              <tr className="border-t border-ink/20">
-                                <td className="py-1.5 pr-4 font-semibold text-ink">Total</td>
-                                <td className="py-1.5 text-right font-semibold text-ink">{day.summary.total}</td>
+                    {day.summary.total > 0 && (
+                      <table className="text-sm border-collapse w-full max-w-xs">
+                        <tbody>
+                          {day.types
+                            .filter((t) => (day.summary.counts[t.key] || 0) > 0)
+                            .map((t) => (
+                              <tr key={t.key} className="border-t border-ink/10">
+                                <td className="py-1.5 pr-4 text-ink-light">{t.label}</td>
+                                <td className="py-1.5 text-right text-ink">{day.summary.counts[t.key]}</td>
                               </tr>
-                            </tbody>
-                          </table>
-                        )}
+                            ))}
+                          <tr className="border-t border-ink/20">
+                            <td className="py-1.5 pr-4 font-semibold text-ink">Total</td>
+                            <td className="py-1.5 text-right font-semibold text-ink">{day.summary.total}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    )}
 
-                        {day.headcountOnly && (
-                          <p className="text-xs text-ink-muted">
-                            These numbers were entered as a headcount, without names.
-                          </p>
-                        )}
+                    {day.headcountOnly && (
+                      <p className="text-xs text-ink-muted">These numbers were entered as a headcount, without names.</p>
+                    )}
 
-                        <button type="button" onClick={() => setMode('edit')} className="btn-primary self-start">
-                          See and edit details
+                    <button type="button" onClick={() => setMode('edit')} className="btn-primary self-start">
+                      See and edit details
+                    </button>
+                  </div>
+                )}
+
+                {/* ---- Attendance table (full width) ---- */}
+                {day && !dayLoading && mode === 'edit' && (
+                  <>
+                    {mode === 'edit' && day.reported && (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!confirmDiscard()) return;
+                            applyDay(day, 'summary');
+                          }}
+                          className="text-sm text-ink-light underline underline-offset-2"
+                        >
+                          Back to summary
                         </button>
                       </div>
                     )}
 
-                    {/* ---- Attendance table ---- */}
-                    {day && typesReady && !dayLoading && mode === 'edit' && (
-                      <>
-                        {day.headcountOnly && (
-                          <p className="text-sm text-marigold-dark">
-                            This date currently has headcount-only numbers ({day.summary.total} in total). Saving will
-                            replace them with the names confirmed below.
-                          </p>
-                        )}
-
-                        <div className="overflow-x-auto rounded-card border border-ink/10">
-                          <table className="w-full text-sm border-collapse">
-                            <thead className="bg-paper-raised text-ink-muted text-xs uppercase tracking-wide">
-                              <tr>
-                                <th className="text-left px-4 py-2">Participant Name</th>
-                                <th className="text-left px-4 py-2">Participant Type</th>
-                                <th className="text-left px-4 py-2">Attendance</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {runs.length === 0 && !addingRow && (
-                                <tr className="border-t border-ink/10">
-                                  <td colSpan={3} className="px-4 py-4 text-ink-muted">
-                                    No one has said they are coming to this date. Use Add participant to record who
-                                    attended.
-                                  </td>
-                                </tr>
-                              )}
-
-                              {runs.map((run) => (
-                                <Fragment key={run[0].participantId}>
-                                  {run.length > 1 && (
-                                    <tr className="border-t border-ink/10 bg-paper-raised">
-                                      <td colSpan={3} className="px-4 py-1.5 text-xs font-medium text-ink-muted">
-                                        {run[0].familyName || run[0].name}&apos;s family
-                                      </td>
-                                    </tr>
-                                  )}
-                                  {run.map((p) => {
-                                    const confirmed = attendedIds.includes(p.participantId);
-                                    const addedByCoordinator = p.rsvp !== 'Yes';
-                                    return (
-                                      <tr key={p.participantId} className="border-t border-ink/10">
-                                        <td className={`px-4 py-2 text-ink ${run.length > 1 ? 'pl-8' : ''}`}>
-                                          {p.name}
-                                          {addedByCoordinator && (
-                                            <span className="ml-2 text-xs text-ink-muted">Added</span>
-                                          )}
-                                        </td>
-                                        <td className="px-4 py-2 text-ink-light">
-                                          {typeLabel(p.typeKey) || (
-                                            <span
-                                              className="text-ink-muted"
-                                              title="No category: date of birth missing or outside every age range"
-                                            >
-                                              —
-                                            </span>
-                                          )}
-                                        </td>
-                                        <td className="px-4 py-2">
-                                          <div className="flex items-center gap-3">
-                                            <button
-                                              type="button"
-                                              aria-pressed={confirmed}
-                                              onClick={() => toggleAttended(p.participantId)}
-                                              className={`rounded-md px-3 py-1 text-xs font-medium whitespace-nowrap border ${
-                                                confirmed
-                                                  ? 'bg-sage text-paper border-transparent'
-                                                  : 'border-ink/30 text-ink hover:bg-paper-raised'
-                                              }`}
-                                            >
-                                              {confirmed ? '✓ Confirmed' : 'Confirm'}
-                                            </button>
-                                            {addedByCoordinator && (
-                                              <button
-                                                type="button"
-                                                onClick={() => removeAddedPerson(p.participantId)}
-                                                aria-label={`Remove ${p.name}`}
-                                                className="text-xs text-ink-muted underline underline-offset-2"
-                                              >
-                                                Remove
-                                              </button>
-                                            )}
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </Fragment>
-                              ))}
-
-                              {addingRow && (
-                                <tr className="border-t border-ink/10 bg-paper-raised">
-                                  <td colSpan={3} className="px-4 py-2">
-                                    {candidates.length === 0 ? (
-                                      <div className="flex items-center gap-3">
-                                        <span className="text-ink-muted">Everyone in this Shakha is already listed.</span>
-                                        <button
-                                          type="button"
-                                          onClick={() => setAddingRow(false)}
-                                          className="text-sm text-ink-muted underline underline-offset-2"
-                                        >
-                                          Close
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <div className="flex items-center gap-3 flex-wrap">
-                                        <select
-                                          autoFocus
-                                          value=""
-                                          onChange={(e) => addPerson(e.target.value)}
-                                          className="input w-full max-w-sm"
-                                          aria-label="Select a participant to add"
-                                        >
-                                          <option value="">Select participant…</option>
-                                          {candidates.map((p) => (
-                                            <option key={p.participantId} value={p.participantId}>
-                                              {personLabel(p)}
-                                            </option>
-                                          ))}
-                                        </select>
-                                        <button
-                                          type="button"
-                                          onClick={() => setAddingRow(false)}
-                                          className="text-sm text-ink-muted underline underline-offset-2"
-                                        >
-                                          Cancel
-                                        </button>
-                                      </div>
-                                    )}
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-
-                        <div className="flex items-center justify-between flex-wrap gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setAddingRow(true)}
-                            disabled={addingRow}
-                            className="rounded-md border border-ink/30 px-3 py-1.5 text-sm text-ink hover:bg-paper-raised disabled:opacity-50"
-                          >
-                            + Add participant
-                          </button>
-
-                          <div className="flex items-center gap-3">
-                            {dirty && <span className="text-xs text-marigold-dark">Unsaved changes</span>}
-                            {justSaved && !dirty && <span className="text-xs text-sage">Saved</span>}
-                            <button
-                              type="button"
-                              onClick={handleSave}
-                              disabled={saving || (!dirty && day.reported)}
-                              className="btn-primary"
-                            >
-                              {saving ? 'Saving…' : 'Save attendance'}
-                            </button>
-                          </div>
-                        </div>
-
-                        {saveError && (
-                          <p className="text-sm text-marigold-dark" role="alert">
-                            {saveError}
-                          </p>
-                        )}
-
-                        <div className="bg-paper-raised rounded-card border border-ink/10 p-4 flex flex-col gap-1">
-                          <p className="text-sm text-ink">{describeAttendance(types, liveCounts.counts, day.date)}</p>
-                          {liveTotal > 0 && <p className="text-xs text-ink-muted">Total confirmed: {liveTotal}</p>}
-                          {liveCounts.uncategorised > 0 && (
-                            <p className="text-xs text-marigold-dark">
-                              {liveCounts.uncategorised} confirmed{' '}
-                              {liveCounts.uncategorised === 1 ? 'person has' : 'people have'} no category (date of
-                              birth missing or outside every age range) and{' '}
-                              {liveCounts.uncategorised === 1 ? 'is' : 'are'} not in these numbers.
-                            </p>
-                          )}
-                        </div>
-                      </>
+                    {day.headcountOnly && (
+                      <p className="text-sm text-marigold-dark">
+                        This date currently has headcount-only numbers ({day.summary.total} in total). Saving will
+                        replace them with the names confirmed below.
+                      </p>
                     )}
-                  </div>
-                </div>
+
+                    <div className="overflow-x-auto rounded-card border border-ink/10">
+                      <table className="w-full text-sm border-collapse">
+                        <thead className="bg-paper-raised text-ink-muted text-xs uppercase tracking-wide">
+                          <tr>
+                            <th className="text-left px-4 py-2">Participant Name</th>
+                            <th className="text-left px-4 py-2">Participant Type</th>
+                            <th className="text-left px-4 py-2">Attendance</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {runs.length === 0 && !addingRow && (
+                            <tr className="border-t border-ink/10">
+                              <td colSpan={3} className="px-4 py-4 text-ink-muted">
+                                No one is waiting to be confirmed for this date. Use Add participant to record who
+                                attended.
+                              </td>
+                            </tr>
+                          )}
+
+                          {runs.map((run) => (
+                            <Fragment key={run[0].participantId}>
+                              {run.length > 1 && (
+                                <tr className="border-t border-ink/10 bg-paper-raised">
+                                  <td colSpan={3} className="px-4 py-1.5 text-xs font-medium text-ink-muted">
+                                    {run[0].familyName || run[0].name}&apos;s family
+                                  </td>
+                                </tr>
+                              )}
+                              {run.map((p) => {
+                                const confirmed = attendedIds.includes(p.participantId);
+                                const registered = p.rsvp === 'Yes'; // said they were coming
+                                return (
+                                  <tr key={p.participantId} className="border-t border-ink/10">
+                                    <td className={`px-4 py-2 text-ink ${run.length > 1 ? 'pl-8' : ''}`}>
+                                      {p.name}
+                                      {!registered && <span className="ml-2 text-xs text-ink-muted">Added</span>}
+                                    </td>
+                                    <td className="px-4 py-2 text-ink-light">
+                                      {typeLabel(p.typeKey)}
+                                      {p.noCategory && (
+                                        <span
+                                          className="ml-1 text-xs text-ink-muted"
+                                          title="No age category found (date of birth missing or outside every range)"
+                                        >
+                                          (no category)
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-2">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <button
+                                          type="button"
+                                          aria-pressed={confirmed}
+                                          onClick={() => toggleAttended(p.participantId)}
+                                          title={confirmed ? 'Click to undo' : undefined}
+                                          className={`rounded-md px-3 py-1 text-xs font-medium whitespace-nowrap border ${
+                                            confirmed
+                                              ? 'bg-sage text-paper border-transparent'
+                                              : 'border-ink/30 text-ink hover:bg-paper-raised'
+                                          }`}
+                                        >
+                                          {confirmed ? (registered ? '✓ Self-confirmed' : '✓ Confirmed') : 'Confirm'}
+                                        </button>
+
+                                        {!confirmed && registered && (
+                                          <button
+                                            type="button"
+                                            onClick={() => markNotAttended(p.participantId)}
+                                            className="rounded-md border border-ink/30 px-3 py-1 text-xs whitespace-nowrap text-ink-light hover:bg-paper-raised"
+                                          >
+                                            Not attended
+                                          </button>
+                                        )}
+
+                                        {!registered && (
+                                          <button
+                                            type="button"
+                                            onClick={() => removeAddedPerson(p.participantId)}
+                                            aria-label={`Remove ${p.name}`}
+                                            className="text-xs text-ink-muted underline underline-offset-2"
+                                          >
+                                            Remove
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </Fragment>
+                          ))}
+
+                          {addingRow && (
+                            <tr className="border-t border-ink/10 bg-paper-raised">
+                              <td colSpan={3} className="px-4 py-2">
+                                {candidates.length === 0 ? (
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-ink-muted">Everyone in this Shakha is already listed.</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setAddingRow(false)}
+                                      className="text-sm text-ink-muted underline underline-offset-2"
+                                    >
+                                      Close
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-3 flex-wrap">
+                                    <select
+                                      autoFocus
+                                      value=""
+                                      onChange={(e) => addPerson(e.target.value)}
+                                      className="input w-full max-w-sm"
+                                      aria-label="Select a participant to add"
+                                    >
+                                      <option value="">Select participant…</option>
+                                      {candidates.map((p) => (
+                                        <option key={p.participantId} value={p.participantId}>
+                                          {personLabel(p)}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <button
+                                      type="button"
+                                      onClick={() => setAddingRow(false)}
+                                      className="text-sm text-ink-muted underline underline-offset-2"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setAddingRow(true)}
+                        disabled={addingRow}
+                        className="rounded-md border border-ink/30 px-3 py-1.5 text-sm text-ink hover:bg-paper-raised disabled:opacity-50"
+                      >
+                        + Add participant
+                      </button>
+
+                      <div className="flex items-center gap-3">
+                        {dirty && <span className="text-xs text-marigold-dark">Unsaved changes</span>}
+                        {justSaved && !dirty && <span className="text-xs text-sage">Saved</span>}
+                        <button
+                          type="button"
+                          onClick={handleSave}
+                          disabled={saving || (!dirty && day.reported)}
+                          className="btn-primary"
+                        >
+                          {saving ? 'Saving…' : 'Save attendance'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {saveError && (
+                      <p className="text-sm text-marigold-dark" role="alert">
+                        {saveError}
+                      </p>
+                    )}
+
+                    {/* Registered people marked Not Attended: out of the table, can be restored */}
+                    {notAttendedPeople.length > 0 && (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => setShowNotAttended((v) => !v)}
+                          aria-expanded={showNotAttended}
+                          className="text-sm text-ink-light underline underline-offset-2"
+                        >
+                          {showNotAttended ? 'Hide' : 'Show'} not attended ({notAttendedPeople.length})
+                        </button>
+                        {showNotAttended && (
+                          <ul className="mt-2 rounded-card border border-ink/10 divide-y divide-ink/10">
+                            {notAttendedPeople.map((p) => (
+                              <li key={p.participantId} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
+                                <span className="text-ink-light">{personLabel(p)}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => restoreNotAttended(p.participantId)}
+                                  className="text-xs text-ink underline underline-offset-2"
+                                >
+                                  Restore
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Summary under the table: includes Others in the counts and the total */}
+                    <div className="bg-paper-raised rounded-card border border-ink/10 p-4 flex flex-col gap-1.5">
+                      <p className="text-sm text-ink">{describeAttendance(dayTypes, liveCounts.counts, day.date)}</p>
+                      {liveTotal > 0 && <p className="text-xs text-ink-muted">Total confirmed: {liveTotal}</p>}
+                      {liveCounts.others.length > 0 && (
+                        <p className="text-xs text-ink-muted">
+                          Counted under Others (no age category): {liveCounts.others.map((p) => p.name).join(', ')}. Add
+                          or correct their date of birth under Participants, then save again, to move them into a
+                          category.
+                        </p>
+                      )}
+                      {pendingCount > 0 && (
+                        <p className="text-xs text-marigold-dark">
+                          {pendingCount} registered {pendingCount === 1 ? 'person still needs' : 'people still need'}{' '}
+                          confirming or marking as not attended.
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>
